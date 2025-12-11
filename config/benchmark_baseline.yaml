@@ -1,0 +1,105 @@
+### BENCHMARK CONFIG 1: BASELINE - Distance-based rewards, standard window sizes
+# Compatible with all planners: RRTSINGLELAYER, RRTFINAL, RRTTWOLAYERED
+
+# Goal Bias
+uniform_goal_bias : 0.75
+sphere_goal_bias : 0.0000001
+
+# MAB Parameters - All planners can read these (unused ones are ignored)
+# Very long windows for stable, exploitation-focused behavior
+# Long windows prevent getting stuck on suboptimal arms while reducing exploration
+#
+# PLANNER USAGE:
+# - RRTFINALIZED (nested 2-layer MAB):
+#     Layer 1: mab_uniform_sphere_window_size (2 arms: CYLINDER vs UNIFORM)
+#     Layer 2: mab_cylinder_direction_window_size (2 arms: UP vs DOWN)
+#
+# - RRTFINALIZED_SINGLELAYER (flat single-layer MAB):
+#     Uses ONLY mab_uniform_sphere_window_size (3 arms: UNIFORM, CYLINDER_UP, CYLINDER_DOWN)
+#     mab_cylinder_direction_window_size is IGNORED
+#
+# - RRTSINGLELAYER/DEBUGRRT: mab_uniform_sphere_window_size (3 arms: VMF, CYLINDER, UNIFORM or 2 arms)
+#
+mab_uniform_sphere_window_size : 256    # Used by all planners for main/single MAB
+mab_cylinder_direction_window_size : 512  # Only used by nested planners (RRTFINALIZED) for cylinder UP/DOWN selection
+
+# If > 0, after this many consecutive valid CYLINDER samples, the planner forces one UNIFORM sample on the next iteration.
+# 0 = feature disabled (default, preserves current behavior)
+forced_uniform_after_cylinder_valid_streak: 6
+
+# Adaptive Sphere Sampling Parameters
+adaptive_quasirandom_sample_size : 128
+adaptive_start_radius : 1.0
+adaptive_min_radius : 0.00001
+adaptive_shrink_step : 0.9
+adaptive_grow_step : 0.1
+adaptive_min_expected_validity_rate : 0.10
+adaptive_max_expected_validity_rate: 0.50
+adaptive_burnin_max_steps: 10
+
+pca_filter_top_percent: 1.0  # Maximum number of burn-in iterations
+
+# Initial Uniform Sampling Check
+# Before starting adaptive sphere burn-in, try k uniform samples.
+# If validity rate > probability, skip adaptive sphere and use uniform only.
+initialFreeSamplingProbability: 0.20
+initialNumberOfUniformSampleTrials: 10
+
+# Sphere Adaptive Sampling - Initial - vMF / Spherical K-Means
+enable_vmf : false           # Enable/disable VMF functionality (DEBUGRRT only)
+enableDynamicCylinderPCA: true # Enable dynamic recomputation of cylinder PCA axis
+
+# Burn-in Early Exit
+# If true, DEBUGRRT will abort planning after burn-in when not enough valid samples were found around the origin.
+burnin_early_exit_enabled: true
+# Minimum number of valid burn-in samples required to continue planning.
+# If total_valid_samples < this value AND burnin_early_exit_enabled == true, the planner will exit early from solve().
+burnin_min_valid_samples_for_continue: 3
+
+# If true, burn-in will exit early if validity rate is 1.0 for consecutiveFullValidityMaxIterations steps
+earlyExitOnConsecutiveFullValidity: true
+consecutiveFullValidityMaxIterations: 5
+
+vmf_sphere_components : 3  # k value
+vmf_max_iter : 100         # how many iterations it should run
+vmf_tolerance : 0.000001    # tolerance, 1e-6
+
+
+# Sphere sampler values
+
+sphere_extension_eps : 0.3 # if sphere sample was walid std::exp(sphere_extension_eps)*currentBestRadius
+                            # to grow the cylinder and sphere as fas as possible 
+                            # also used for kappa maybe add another param for kappa
+
+# Reward System Configuration
+use_distance_based_rewards: false           # Disabled - using simple fixed rewards
+
+# Fixed reward parameters (simple and clear)
+uniform_sampler_fixed_valid_reward: 9999999.0  # Fixed reward for valid uniform samples (high to encourage exploration when disassembled)
+uniform_sampler_invalid_reward: 0.0         # Fixed reward for invalid uniform samples
+
+sphere_sampler_fixed_valid_reward: 5.0      # Fixed reward for valid cylinder/VMF samples
+sphere_sampler_invalid_reward: 1.00         # Fixed reward for invalid cylinder/VMF samples (small positive to discourage uniform when assembled)
+
+# HammersleySphere sampling parameters
+cylinder_radius_offset_multiplier: 0.1     # Offset multiplier for cylinder radius in PCA fitting
+fibonacci_jitter_radius: 0.39269908169872414  # M_PI/8 - Jitter radius for Fibonacci lattice sampling
+cylinder_sampling_radius_multiplier: 1.5   # Radius multiplier for cylinder sampling
+
+# ====================================================================================
+# RANK-OF-MOTION DISASSEMBLY DETECTION (RRTDISASSEMBLEDONLY planner)
+# ====================================================================================
+# These parameters configure the local rank probing used to detect disassembly
+# without requiring explicit goal states.
+#
+# The planner probes ±perturbation in each dimension (x, y, z, rx, ry, rz) to
+# determine which dimensions are FREE (motion valid) vs BLOCKED (collision).
+#
+# Disassembly is detected when:
+#   1. rank_increase >= rank_increase_threshold (blocked dims becoming free)
+#   2. total_free_dims >= min_free_dimensions_for_disassembly
+#
+rank_probe_perturbation: 0.01         # Epsilon for local probes (absolute distance for translation, radians for rotation)
+rank_increase_threshold: 3            # Minimum number of dimensions that must change from blocked to free
+min_free_dimensions_for_disassembly: 4  # Minimum total free DOFs required for disassembly
+

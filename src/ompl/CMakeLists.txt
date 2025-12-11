@@ -44,6 +44,7 @@ target_link_libraries(ompl
     PUBLIC
         Boost::serialization
         Eigen3::Eigen
+        yaml-cpp::yaml-cpp
         "$<$<BOOL:${Threads_FOUND}>:Threads::Threads>"
         "$<$<BOOL:${OMPL_HAVE_FLANN}>:flann::flann>"
         "$<$<BOOL:${OMPL_EXTENSION_TRIANGLE}>:Triangle::Triangle>"
