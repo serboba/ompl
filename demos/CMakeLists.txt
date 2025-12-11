@@ -58,6 +58,16 @@ if (OMPL_BUILD_DEMOS)
 
     add_ompl_demo(demo_SpaceTimePlanning SpaceTimePlanning.cpp)
 
+    # MAB-SSRRT Demo - Multi-Armed Bandit Sphere-Sampled RRT planner
+    add_ompl_demo(demo_MAB_SSRRT disassembly/MAB_SSRRT_Demo.cpp)
+    target_link_libraries(demo_MAB_SSRRT PRIVATE yaml-cpp::yaml-cpp)
+    
+    # Copy config file to build directory
+    configure_file(
+        ${CMAKE_CURRENT_SOURCE_DIR}/disassembly/benchmark_baseline.yaml
+        ${CMAKE_CURRENT_BINARY_DIR}/benchmark_baseline.yaml
+        COPYONLY)
+
     # yaml-cpp is now a required dependency and target alias is handled in main CMakeLists.txt
 
         add_ompl_demo(demo_MulticopterPlanning 
