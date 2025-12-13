@@ -35,7 +35,7 @@
 /* Author: Servet Bora Bayraktar */
 
 /**
- * @file MAB_SSRRT_1L.cpp
+ * @file MAB_SSRRT_DEBUG.cpp
  * @brief Implementation of MAB-SSRRT-1L (Single-Layer MAB variant)
  * 
  * This file implements the single-layer Multi-Armed Bandit Sphere-Sampled RRT.
@@ -43,7 +43,7 @@
  * nested 2-arm MABs.
  */
 
-#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_1L_DEBUG.h"
+#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h"
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -64,10 +64,10 @@
  * 2. YAML-based parameter loading
  * 3. Single 3-arm MAB for sampling strategy selection
  */
-ompl::geometric::MAB_SSRRT_1L_DEBUG::MAB_SSRRT_1L_DEBUG(
+ompl::geometric::MAB_SSRRT_DEBUG::MAB_SSRRT_DEBUG(
     const base::SpaceInformationPtr& si, 
     const std::string& yamlFilePath)
-    : MAB_SSRRT_1L(si, yamlFilePath)
+    : MAB_SSRRT(si, yamlFilePath)
 {
     // Base class constructor handles all initialization including mab_sampler_
     // Debug tracking is enabled by default (debugEnabled_ = true)
@@ -96,7 +96,7 @@ ompl::geometric::MAB_SSRRT_1L_DEBUG::MAB_SSRRT_1L_DEBUG(
  * - Reward system configuration
  * - Cylinder sampling configuration
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::loadYAMLConfig(const std::string& yamlFilePath)
+void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFilePath)
 {
     try
     {
@@ -186,7 +186,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::loadYAMLConfig(const std::string& yaml
 // DESTRUCTOR & CLEANUP
 // =============================================================================
 
-ompl::geometric::MAB_SSRRT_1L_DEBUG::~MAB_SSRRT_1L_DEBUG()
+ompl::geometric::MAB_SSRRT_DEBUG::~MAB_SSRRT_DEBUG()
 {
     // Base class destructor handles cleanup
 }
@@ -195,7 +195,7 @@ ompl::geometric::MAB_SSRRT_1L_DEBUG::~MAB_SSRRT_1L_DEBUG()
  * Resets planner state for a new planning episode.
  * Called by clear() and when replanning.
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::clear()
+void ompl::geometric::MAB_SSRRT_DEBUG::clear()
 {
     Planner::clear();
     sampler_.reset();
@@ -211,7 +211,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::clear()
     sampleStateToIndex_.clear();
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::setup()
+void ompl::geometric::MAB_SSRRT_DEBUG::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
@@ -228,7 +228,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::setup()
 /**
  * Frees all Motion nodes and sampling arms.
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::freeMemory()
+void ompl::geometric::MAB_SSRRT_DEBUG::freeMemory()
 {
     std::vector<Motion*> motions;
     
@@ -255,7 +255,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::freeMemory()
  * - Arm 0: Cylinder sampler (XYZ only, uses adaptive sphere)
  * - Arm 1: Uniform sampler (all dimensions)
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::initializeArms()
+void ompl::geometric::MAB_SSRRT_DEBUG::initializeArms()
 {
     samplingArms_.clear();
     createCylinderSamplingArm();
@@ -274,7 +274,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::initializeArms()
  *         This is controlled by the axesMask {1,1} where:
  *         - Both ones: Sample XY
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::createCylinderSamplingArm()
+void ompl::geometric::MAB_SSRRT_DEBUG::createCylinderSamplingArm()
 {
     int stateDim = si_->getStateDimension();
     std::vector<int> cylinderAxesMask;
@@ -313,7 +313,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::createCylinderSamplingArm()
  * - 2D: axesMask {1,1} means sample all 2 dimensions
  * - 6D: axesMask {1,1,1,1,1,1} means sample all 6 dimensions
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::createUniformSamplingArm()
+void ompl::geometric::MAB_SSRRT_DEBUG::createUniformSamplingArm()
 {
     int stateDim = si_->getStateDimension();
     std::vector<int> uniformAxesMask(stateDim, 1);  // Sample all dimensions
@@ -328,7 +328,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::createUniformSamplingArm()
  * Copies a sample vector (x,y,z) into an OMPL state.
  * Uses the axesMask to determine which dimensions to fill.
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::copySampleVectorIntoState(
+void ompl::geometric::MAB_SSRRT_DEBUG::copySampleVectorIntoState(
     base::State* sample_state, 
     SamplingArm& hypothesis,
     std::vector<double> vec)
@@ -353,7 +353,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::copySampleVectorIntoState(
 /**
  * Samples uniformly across all state space dimensions.
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::sampleUniformHypothesis(base::State* sample_state)
+void ompl::geometric::MAB_SSRRT_DEBUG::sampleUniformHypothesis(base::State* sample_state)
 {
     uniformRealVecSampler_->sampleSelectedIndices(sample_state, samplingArms_.at(1)->axesIndices);
 }
@@ -362,7 +362,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::sampleUniformHypothesis(base::State* s
  * Computes the validity rate of samples at the current radius.
  * Used during burn-in to adjust the sampling radius.
  */
-double ompl::geometric::MAB_SSRRT_1L_DEBUG::computeValidityRate()
+double ompl::geometric::MAB_SSRRT_DEBUG::computeValidityRate()
 {
     base::State* sample_state = si_->allocState();
     base::State* origin_state = si_->allocState();
@@ -404,7 +404,7 @@ double ompl::geometric::MAB_SSRRT_1L_DEBUG::computeValidityRate()
  * 2. Finds the optimal sampling radius
  * 3. Seeds the cylinder sampler with valid samples
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::setupAdaptiveSphereSampling()
+void ompl::geometric::MAB_SSRRT_DEBUG::setupAdaptiveSphereSampling()
 {
     // First, check if uniform sampling works well (problem is "easy")
     if (performInitialUniformCheck())
@@ -420,7 +420,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::setupAdaptiveSphereSampling()
  * Tests if uniform sampling has high validity rate.
  * If yes, skip the expensive adaptive sphere burn-in.
  */
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::performInitialUniformCheck()
+bool ompl::geometric::MAB_SSRRT_DEBUG::performInitialUniformCheck()
 {
     if (initialNumberOfUniformSampleTrials_ <= 0)
     {
@@ -477,7 +477,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::performInitialUniformCheck()
  * 4. If too high: grow radius, discard samples
  * 5. Repeat until in target range or max steps reached
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::performAdaptiveBurnin()
+void ompl::geometric::MAB_SSRRT_DEBUG::performAdaptiveBurnin()
 {
     OMPL_INFORM("DEBUG: Starting adaptive burn-in phase");
     
@@ -529,7 +529,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::performAdaptiveBurnin()
     finalizeBurnin(sphere, current_radius);
 }
 
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::shouldExitEarlyOnFullValidity(
+bool ompl::geometric::MAB_SSRRT_DEBUG::shouldExitEarlyOnFullValidity(
     double validity_rate,
     int& consecutive_count,
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere)
@@ -557,13 +557,13 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::shouldExitEarlyOnFullValidity(
     return false;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::isValidityRateInTargetRange(double validity_rate) const
+bool ompl::geometric::MAB_SSRRT_DEBUG::isValidityRateInTargetRange(double validity_rate) const
 {
     return (validity_rate > adaptiveMinExpectedValidityRate_ &&
             validity_rate <= adaptiveMaxExpectedValidityRate_);
 }
 
-double ompl::geometric::MAB_SSRRT_1L_DEBUG::adjustRadiusBasedOnValidity(
+double ompl::geometric::MAB_SSRRT_DEBUG::adjustRadiusBasedOnValidity(
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
     double current_radius,
     double validity_rate)
@@ -584,7 +584,7 @@ double ompl::geometric::MAB_SSRRT_1L_DEBUG::adjustRadiusBasedOnValidity(
     return current_radius;
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::finalizeBurnin(
+void ompl::geometric::MAB_SSRRT_DEBUG::finalizeBurnin(
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
     double final_radius)
 {
@@ -614,7 +614,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::finalizeBurnin(
  *   Arm 1 = CYLINDER_UP
  *   Arm 2 = CYLINDER_DOWN
  */
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::updateRewards(bool isValid, MABPath selectedMABPath)
+void ompl::geometric::MAB_SSRRT_DEBUG::updateRewards(bool isValid, MABPath selectedMABPath)
 {
     double reward = 0.0;
     int armIndex = -1;
@@ -668,7 +668,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::updateRewards(bool isValid, MABPath se
  * 
  * Returns: true if valid sample generated, false otherwise
  */
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::getSample(
+bool ompl::geometric::MAB_SSRRT_DEBUG::getSample(
     base::State *sample_state, 
     Motion* tempMotion, 
     double extensionFactor, 
@@ -742,7 +742,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::getSample(
     return isSampleValid;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::checkSamplingPrerequisites(
+bool ompl::geometric::MAB_SSRRT_DEBUG::checkSamplingPrerequisites(
     base::State* sample_state,
     bool* isGoalSampleOut)
 {
@@ -777,8 +777,8 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::checkSamplingPrerequisites(
  * 
  * This is simpler than the 2L variant which uses nested MABs.
  */
-ompl::geometric::MAB_SSRRT_1L_DEBUG::SamplerArm 
-ompl::geometric::MAB_SSRRT_1L_DEBUG::selectSamplingArm()
+ompl::geometric::MAB_SSRRT_DEBUG::SamplerArm 
+ompl::geometric::MAB_SSRRT_DEBUG::selectSamplingArm()
 {
     // Check for forced uniform after consecutive cylinder success
     if (forcedUniformAfterCylinderValidStreak_ > 0 &&
@@ -833,7 +833,7 @@ ompl::geometric::MAB_SSRRT_1L_DEBUG::selectSamplingArm()
  * Checks if we should sample from the goal region.
  * Goal bias is different for uniform vs cylinder arms.
  */
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::shouldSampleGoal(
+bool ompl::geometric::MAB_SSRRT_DEBUG::shouldSampleGoal(
     bool* isGoalSampleOut,
     Motion** nearestMotionOut,
     base::State* sample_state)
@@ -864,7 +864,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::shouldSampleGoal(
 // =============================================================================
 
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::generateAndValidateSample(
+bool ompl::geometric::MAB_SSRRT_DEBUG::generateAndValidateSample(
     base::State* sample_state,
     ValidateFunc& validateState,
     double radius,
@@ -896,7 +896,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::generateAndValidateSample(
  * so we just use whichever arm was chosen.
  */
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::sampleFromCylinder(
+bool ompl::geometric::MAB_SSRRT_DEBUG::sampleFromCylinder(
     base::State* sample_state,
     ValidateFunc& validateState,
     double radius,
@@ -943,7 +943,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::sampleFromCylinder(
 }
 
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::fallbackToUniform(
+bool ompl::geometric::MAB_SSRRT_DEBUG::fallbackToUniform(
     base::State* sample_state,
     ValidateFunc& validateState,
     MABPath& selectedMABPath)
@@ -954,7 +954,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::fallbackToUniform(
     return validateState(sample_state);
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::updateSamplingStatistics(
+void ompl::geometric::MAB_SSRRT_DEBUG::updateSamplingStatistics(
     MABPath selectedMABPath,
     bool isSampleValid,
     base::State* sample_state,
@@ -999,8 +999,8 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::updateSamplingStatistics(
 // SOLVE HELPER METHODS
 // =============================================================================
 
-ompl::geometric::MAB_SSRRT_1L_DEBUG::Motion* 
-ompl::geometric::MAB_SSRRT_1L_DEBUG::addMotionToTree(
+ompl::geometric::MAB_SSRRT_DEBUG::Motion* 
+ompl::geometric::MAB_SSRRT_DEBUG::addMotionToTree(
     base::State* state, Motion* parent, MotionOrigin origin)
 {
     auto* motion = new Motion(si_);
@@ -1078,7 +1078,7 @@ ompl::geometric::MAB_SSRRT_1L_DEBUG::addMotionToTree(
     return motion;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::checkAndUpdateSolution(
+bool ompl::geometric::MAB_SSRRT_DEBUG::checkAndUpdateSolution(
     Motion* motion, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
 {
@@ -1109,8 +1109,8 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::checkAndUpdateSolution(
  * 2. Try non-exhausted CYLINDER nodes
  * 3. Fall back to nearest neighbor
  */
-ompl::geometric::MAB_SSRRT_1L_DEBUG::Motion* 
-ompl::geometric::MAB_SSRRT_1L_DEBUG::findBestMotionForGoal(
+ompl::geometric::MAB_SSRRT_DEBUG::Motion* 
+ompl::geometric::MAB_SSRRT_DEBUG::findBestMotionForGoal(
     base::State* goalState, Motion* queryMotion)
 {
     std::vector<Motion*> motions;
@@ -1157,7 +1157,7 @@ ompl::geometric::MAB_SSRRT_1L_DEBUG::findBestMotionForGoal(
     return nn_->nearest(queryMotion);
 }
 
-ompl::base::State* ompl::geometric::MAB_SSRRT_1L_DEBUG::applyDistanceLimit(
+ompl::base::State* ompl::geometric::MAB_SSRRT_DEBUG::applyDistanceLimit(
     Motion* from, base::State* to, base::State* buffer, double distance)
 {
     if (distance > maxDistance_)
@@ -1168,7 +1168,7 @@ ompl::base::State* ompl::geometric::MAB_SSRRT_1L_DEBUG::applyDistanceLimit(
     return to;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::handleGoalSamplePath(
+bool ompl::geometric::MAB_SSRRT_DEBUG::handleGoalSamplePath(
     base::State* rstate, base::State* xstate,
     Motion* rmotion, base::State* originState, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
@@ -1225,7 +1225,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::handleGoalSamplePath(
  * For UNIFORM samples:
  * - Apply step-wise distance limit (traditional RRT extension)
  */
-bool ompl::geometric::MAB_SSRRT_1L_DEBUG::handleNormalSamplePath(
+bool ompl::geometric::MAB_SSRRT_DEBUG::handleNormalSamplePath(
     base::State* rstate, base::State* xstate,
     Motion* nearestMotion, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
@@ -1307,7 +1307,7 @@ bool ompl::geometric::MAB_SSRRT_1L_DEBUG::handleNormalSamplePath(
  *    c. Check for goal connection
  * 4. Build solution path
  */
-ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_1L_DEBUG::solve(
+ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_DEBUG::solve(
     const base::PlannerTerminationCondition& ptc)
 {
     checkValidity();
@@ -1437,12 +1437,12 @@ ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_1L_DEBUG::solve(
         // DEBUG: Export path with sampler information
         if (debugEnabled_) {
             // Build base class path for export
-            std::vector<MAB_SSRRT_1L::Motion*> baseMpath;
+            std::vector<MAB_SSRRT::Motion*> baseMpath;
             for (Motion* m : mpath) {
                 // Access the base class Motion through inheritance
                 // Since Motion in DEBUG inherits from base Motion, we can use reinterpret_cast
                 // or better: access the state and rebuild the path from PlannerData
-                baseMpath.push_back(reinterpret_cast<MAB_SSRRT_1L::Motion*>(m));
+                baseMpath.push_back(reinterpret_cast<MAB_SSRRT::Motion*>(m));
             }
             exportPathWithSamplers("bugtrap_path.csv", baseMpath);
         }
@@ -1463,7 +1463,7 @@ ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_1L_DEBUG::solve(
                     base::PlannerStatus::TIMEOUT;
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::getPlannerData(base::PlannerData &data) const
+void ompl::geometric::MAB_SSRRT_DEBUG::getPlannerData(base::PlannerData &data) const
 {
     Planner::getPlannerData(data);
 
@@ -1488,7 +1488,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::getPlannerData(base::PlannerData &data
 // DEBUG TRACKING METHODS
 // =============================================================================
 
-std::string ompl::geometric::MAB_SSRRT_1L_DEBUG::getStateKey(const base::State* state) const
+std::string ompl::geometric::MAB_SSRRT_DEBUG::getStateKey(const base::State* state) const
 {
     if (state == nullptr) return "";
     
@@ -1510,7 +1510,7 @@ std::string ompl::geometric::MAB_SSRRT_1L_DEBUG::getStateKey(const base::State* 
     return ss.str();
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::trackSample(
+void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
     const base::State* state, 
     bool isValid, 
     const std::string& phase,
@@ -1580,14 +1580,16 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::trackSample(
     }
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::exportPathWithSamplers(
-    const std::string& filename, const std::vector<MAB_SSRRT_1L::Motion*>& mpath) const
+void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
+    const std::string& filename, const std::vector<MAB_SSRRT::Motion*>& mpath) const
 {
     // Try multiple locations
     std::vector<std::string> possiblePaths = {
         filename,
         "../" + filename,
         "../../" + filename,
+        "demos/" + filename,
+        "../demos/" + filename,
         "/tmp/" + filename
     };
     
@@ -1603,7 +1605,7 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::exportPathWithSamplers(
         // Write path in reverse order (from start to goal)
         for (int i = static_cast<int>(mpath.size()) - 1; i >= 0; --i)
         {
-            MAB_SSRRT_1L::Motion* motion = mpath[i];
+            MAB_SSRRT::Motion* motion = mpath[i];
             const auto* realState = motion->state->as<base::RealVectorStateSpace::StateType>();
             if (realState == nullptr) continue;
             
@@ -1621,11 +1623,11 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::exportPathWithSamplers(
             
             // Determine sampler from MotionOrigin
             std::string sampler = "unknown";
-            // Access bornFrom which is of type MAB_SSRRT_1L::MotionOrigin
+            // Access bornFrom which is of type MAB_SSRRT::MotionOrigin
             auto origin = motion->bornFrom;
-            if (origin == MAB_SSRRT_1L::MotionOrigin::UNIFORM) {
+            if (origin == MAB_SSRRT::MotionOrigin::UNIFORM) {
                 sampler = "uniform";
-            } else if (origin == MAB_SSRRT_1L::MotionOrigin::CYLINDER) {
+            } else if (origin == MAB_SSRRT::MotionOrigin::CYLINDER) {
                 // Default to cylinder_up - we can't determine UP/DOWN from MotionOrigin alone
                 // but this is better than nothing
                 sampler = "cylinder_up";
@@ -1645,30 +1647,47 @@ void ompl::geometric::MAB_SSRRT_1L_DEBUG::exportPathWithSamplers(
     }
 }
 
-void ompl::geometric::MAB_SSRRT_1L_DEBUG::exportSampleData(const std::string& filename) const
+void ompl::geometric::MAB_SSRRT_DEBUG::exportSampleData(const std::string& filename) const
 {
-    std::ofstream outFile(filename);
-    if (!outFile.is_open()) {
-        OMPL_ERROR("Could not open file for writing: %s", filename.c_str());
-        return;
+    // Try multiple locations (same as exportPathWithSamplers)
+    std::vector<std::string> possiblePaths = {
+        filename,
+        "../" + filename,
+        "../../" + filename,
+        "demos/" + filename,
+        "../demos/" + filename,
+        "/tmp/" + filename
+    };
+    
+    bool saved = false;
+    for (const auto& sampleFile : possiblePaths)
+    {
+        std::ofstream outFile(sampleFile);
+        if (!outFile.is_open()) continue;
+        
+        outFile << std::fixed << std::setprecision(6);
+        outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,was_connected,nearest_x,nearest_y\n";
+        
+        for (const auto& sample : debugSamples_) {
+            outFile << sample.x << "," << sample.y << ","
+                    << (sample.isValid ? "1" : "0") << ","
+                    << sample.phase << ","
+                    << sample.sampler << ","
+                    << sample.iteration << ","
+                    << sample.reward << ","
+                    << sample.radius << ","
+                    << (sample.wasConnected ? "1" : "0") << ","
+                    << sample.nearest_x << ","
+                    << sample.nearest_y << "\n";
+        }
+        
+        outFile.close();
+        OMPL_INFORM("Exported %zu debug samples to %s", debugSamples_.size(), sampleFile.c_str());
+        saved = true;
+        break;
     }
     
-    outFile << std::fixed << std::setprecision(6);
-    outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,was_connected,nearest_x,nearest_y\n";
-    
-    for (const auto& sample : debugSamples_) {
-        outFile << sample.x << "," << sample.y << ","
-                << (sample.isValid ? "1" : "0") << ","
-                << sample.phase << ","
-                << sample.sampler << ","
-                << sample.iteration << ","
-                << sample.reward << ","
-                << sample.radius << ","
-                << (sample.wasConnected ? "1" : "0") << ","
-                << sample.nearest_x << ","
-                << sample.nearest_y << "\n";
+    if (!saved) {
+        OMPL_WARN("Could not save debug samples to any location");
     }
-    
-    outFile.close();
-    OMPL_INFORM("Exported %zu debug samples to %s", debugSamples_.size(), filename.c_str());
 }

@@ -3,10 +3,8 @@
 
 #include <ompl/datastructures/geometry/Point3D.h>
 #include <ompl/datastructures/geometry/Cylinder3D.h>
-#include <ompl/datastructures/statistics/VMFDistribution.h>
 #include <ompl/base/samplers/sphere/FibonacciSphereSampler.h>
 #include <ompl/base/samplers/sphere/UniformSphereSampler.h>
-#include <ompl/base/samplers/sphere/VMFSampler.h>
 #include <ompl/base/samplers/sphere/CylinderSampler.h>
 #include <ompl/base/ValidStateSampler.h>
 #include <vector>
@@ -24,7 +22,6 @@ namespace ompl
         public:
             using Point = geometry::Point3D;
             using Cylinder = geometry::Cylinder3D;
-            using VMFComponent = statistics::VMFComponent;
 
             AdaptiveSphereSampler(const base::SpaceInformation *si, int sampleSize, double radius, const std::vector<int>& axesIndices = {0, 1, 2});
 
@@ -58,9 +55,6 @@ namespace ompl
             /** Get the rate of valid samples */
             double getValidSampleRate() const;
 
-            /** Sample from a specific VMF component */
-            Point sampleFromVMF(int componentID, double newRadius, double kappaMultiplier);
-
             /** Sample from a cylinder fitted to valid points */
             Point getRandomSampleFromCylinder(double extensionHeight, int chosenDirection);
             Point getRandomSampleFromCylinder(double extensionHeight, int chosenDirection, const Eigen::Vector3d &axis);
@@ -68,18 +62,11 @@ namespace ompl
             /** @brief Update cylinder axis using PCA on valid points */
             void updateCylinderAxis();
 
-            /** Fit VMF mixture model to valid points */
-            std::vector<VMFComponent> fitVMFMixtureModel(int K, int maxIter, double tol);
-
-            /** Select a component based on weights */
-            int selectComponent();
-
             // Accessors
             const std::vector<Point>& getSpherePoints() const { return spherePoints_; }
             const std::vector<int>& getIndices() const { return indices_; }
             const std::vector<Point>& getAllValidPoints() const { return allValidPoints_; }
             const std::vector<Point>& getAllPointsCached() const { return allPoints_cached_; }
-            const std::vector<VMFComponent>& getSphereComponents() const { return vmfSampler_.getComponents(); }
             double getBestRadius() const { return bestRadius_; }
             
             // Configuration
@@ -103,7 +90,6 @@ namespace ompl
             // Samplers
             FibonacciSphereSampler fibSampler_;
             UniformSphereSampler uniSampler_;
-            VMFSampler vmfSampler_;
             CylinderSampler cylinderSampler_;
 
             // Data
@@ -112,7 +98,6 @@ namespace ompl
             std::vector<int> axesIndices_;
             std::vector<Point> allValidPoints_;
             std::vector<Point> allPoints_cached_;
-            // sphereComponents_ managed by vmfSampler_
 
             // Parameters
             double bestRadius_ = 0.0;

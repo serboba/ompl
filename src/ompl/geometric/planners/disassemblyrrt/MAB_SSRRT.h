@@ -35,24 +35,22 @@
 /* Author: Servet Bora Bayraktar */
 
 /**
- * @file MAB_SSRRT_1L.h
- * @brief Multi-Armed Bandit Sphere-Sampled RRT with Single-Layer MAB (1L)
+ * @file MAB_SSRRT.h
+ * @brief Multi-Armed Bandit Sphere-Sampled RRT
  * 
  * =============================================================================
  * ALGORITHM OVERVIEW
  * =============================================================================
  * 
- * MAB-SSRRT-1L is an RRT-based motion planner that uses Multi-Armed Bandit (MAB)
+ * MAB-SSRRT is an RRT-based motion planner that uses Multi-Armed Bandit (MAB)
  * reinforcement learning to adaptively select between different sampling strategies.
  * 
- * The "1L" (Single Layer) variant uses a FLAT 3-arm MAB:
+ * The planner uses a FLAT 3-arm MAB:
  *   - Arm 0: UNIFORM sampling (random samples across entire state space)
  *   - Arm 1: CYLINDER_UP sampling (directed samples along +Z axis)
  *   - Arm 2: CYLINDER_DOWN sampling (directed samples along -Z axis)
  * 
- * This is in contrast to the 2L (Two Layer) variant which uses nested MABs:
- *   - Layer 1: UNIFORM vs CYLINDER selection
- *   - Layer 2: UP vs DOWN direction (only when CYLINDER is selected)
+ * The planner uses a flat MAB structure with three arms competing directly.
  * 
  * =============================================================================
  * KEY CONCEPTS
@@ -78,7 +76,7 @@
  * =============================================================================
  * 
  * @code
- * auto planner = std::make_shared<og::MAB_SSRRT_1L>(si, "/path/to/config.yaml");
+ * auto planner = std::make_shared<og::MAB_SSRRT>(si, "/path/to/config.yaml");
  * planner->setProblemDefinition(pdef);
  * planner->setup();
  * auto status = planner->solve(timeout);
@@ -87,50 +85,45 @@
  * =============================================================================
  */
 
-#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_1L_DEBUG_
-#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_1L_DEBUG_
+#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_
+#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_
 
-#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_1L.h"
-#include <vector>
-#include <string>
-#include <map>
+#include "ompl/datastructures/NearestNeighbors.h"
+#include "ompl/geometric/planners/PlannerIncludes.h"
+#include <ompl/base/spaces/RealVectorStateSpace.h>
+#include <ompl/base/StateSampler.h>
+
+#include <ompl/base/samplers/sphere/AdaptiveSphereSampler.h>
+#include <ompl/datastructures/MultiArmedBandits.h>
 
 namespace ompl {
     namespace geometric {
 
         /**
-         * @class MAB_SSRRT_1L_DEBUG
-         * @brief DEBUG VERSION: Multi-Armed Bandit Sphere-Sampled RRT with Single-Layer MAB
-         * 
-         * This is a debug version with extensive logging and sample tracking.
-         * Use MAB_SSRRT_1L for production code.
+         * @class MAB_SSRRT
+         * @brief Multi-Armed Bandit Sphere-Sampled RRT
          * 
          * This planner extends RRT with:
          * - Adaptive sphere sampling for constraint discovery
          * - Cylinder sampling along principal constraint axis
-         * - Single-layer MAB for arm selection (3 arms: UNIFORM, CYL_UP, CYL_DOWN)
+         * - MAB for arm selection (3 arms: UNIFORM, CYL_UP, CYL_DOWN)
          * 
          * Particularly effective for:
          * - Disassembly planning where objects have limited motion directions
          * - Narrow passage problems with known constraint structure
          * - Environments where directed exploration outperforms uniform
          */
-        class MAB_SSRRT_1L_DEBUG : public MAB_SSRRT_1L {
+        class MAB_SSRRT : public base::Planner {
         public:
             /** @brief Constructor with YAML configuration file path */
-            MAB_SSRRT_1L_DEBUG(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
+            MAB_SSRRT(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
 
-            ~MAB_SSRRT_1L_DEBUG() override;
-            
-            /** @brief Export debug sample data to CSV file */
-            void exportSampleData(const std::string& filename) const;
-            
-            /** @brief Export path with sampler information to CSV */
-            void exportPathWithSamplers(const std::string& filename, const std::vector<MAB_SSRRT_1L::Motion*>& mpath) const;
-            
-            // Override base class methods to add debug tracking
-            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
+            ~MAB_SSRRT() override;
+
             void getPlannerData(base::PlannerData &data) const override;
+
+            base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
+
             void clear() override;
 
             /** @brief Set the goal bias (probability of sampling goal) */
@@ -161,9 +154,9 @@ namespace ompl {
             // ====================================================================
 
             /**
-             * @brief Sampling arm selection for flat MAB (3 arms)
+             * @brief Sampling arm selection for MAB (3 arms)
              * 
-             * In the 1L (single-layer) variant, all three options are at the same level:
+             * All three options are at the same level:
              * - UNIFORM: Random sampling across entire state space
              * - CYLINDER_UP: Directed sampling along +Z axis (primary motion direction)
              * - CYLINDER_DOWN: Directed sampling along -Z axis (opposite direction)
@@ -464,40 +457,6 @@ namespace ompl {
             int cylinderValidStreak_{0};
             SamplerArm selectedSamplerArm_{SamplerArm::UNIFORM};
             std::shared_ptr<base::RealVectorStateSampler> uniformRealVecSampler_;
-            
-            // ====================================================================
-            // DEBUG TRACKING
-            // ====================================================================
-            
-            /** @brief Structure to track a sample for debugging */
-            struct DebugSample {
-                double x, y;  // For 2D, or x,y,z for 3D
-                bool isValid;
-                std::string phase;  // "burnin" or "planning"
-                std::string sampler; // "uniform", "cylinder_up", "cylinder_down"
-                int iteration;
-                double reward;
-                double radius;  // For sphere samples
-                // Connection/edge information
-                bool wasConnected;  // Whether this sample was connected to the tree
-                double nearest_x, nearest_y;  // Coordinates of nearest neighbor (if connected)
-            };
-            
-            std::vector<DebugSample> debugSamples_;  ///< All tracked samples
-            bool debugEnabled_{true};  ///< Enable debug tracking
-            
-            // Map to track which sample state corresponds to which debug sample index
-            // Key: state pointer (as string representation), Value: index in debugSamples_
-            std::map<std::string, size_t> sampleStateToIndex_;  ///< Map state to sample index for connection tracking
-            
-            /** @brief Track a sample for debugging */
-            void trackSample(const base::State* state, bool isValid, 
-                           const std::string& phase, const std::string& sampler,
-                           double reward = 0.0, double radius = 0.0,
-                           const base::State* nearestState = nullptr, bool wasConnected = false);
-            
-            /** @brief Get state key for mapping */
-            std::string getStateKey(const base::State* state) const;
         };
     }
 }

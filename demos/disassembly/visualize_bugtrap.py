@@ -107,6 +107,10 @@ def load_samples(filename):
     valid_samples_y = []
     invalid_samples_x = []
     invalid_samples_y = []
+    burnin_valid_x = []
+    burnin_valid_y = []
+    burnin_invalid_x = []
+    burnin_invalid_y = []
     edges = []  # List of (x1, y1, x2, y2) tuples for edges
     samples_data = []  # List of dicts with all sample info
     
@@ -121,32 +125,43 @@ def load_samples(filename):
                 nearest_x = float(row.get('nearest_x', '0'))
                 nearest_y = float(row.get('nearest_y', '0'))
                 sampler = row.get('sampler', 'unknown')
+                phase = row.get('phase', 'planning')  # Get phase information
                 
                 sample_info = {
                     'x': x, 'y': y, 'is_valid': is_valid,
-                    'sampler': sampler, 'was_connected': was_connected
+                    'sampler': sampler, 'was_connected': was_connected, 'phase': phase
                 }
                 samples_data.append(sample_info)
                 
-                if is_valid:
-                    valid_samples_x.append(x)
-                    valid_samples_y.append(y)
-                else:
-                    invalid_samples_x.append(x)
-                    invalid_samples_y.append(y)
+                # Separate burn-in and planning samples
+                if phase == 'burnin':
+                    if is_valid:
+                        burnin_valid_x.append(x)
+                        burnin_valid_y.append(y)
+                    else:
+                        burnin_invalid_x.append(x)
+                        burnin_invalid_y.append(y)
+                else:  # planning phase
+                    if is_valid:
+                        valid_samples_x.append(x)
+                        valid_samples_y.append(y)
+                    else:
+                        invalid_samples_x.append(x)
+                        invalid_samples_y.append(y)
                 
-                # Add edge if connected
+                # Add edge if connected (only for planning phase)
                 # Always add edge if was_connected is true, even if nearest is (0,0) (start state)
-                if was_connected:
+                if was_connected and phase == 'planning':
                     edges.append((nearest_x, nearest_y, x, y))
                     
     except FileNotFoundError:
-        return None, None, None, None, [], []
+        return None, None, None, None, None, None, None, None, [], []
     except Exception as e:
         print(f"Error reading samples file: {e}")
-        return None, None, None, None, [], []
+        return None, None, None, None, None, None, None, None, [], []
     
-    return valid_samples_x, valid_samples_y, invalid_samples_x, invalid_samples_y, edges, samples_data
+    return valid_samples_x, valid_samples_y, invalid_samples_x, invalid_samples_y, \
+           burnin_valid_x, burnin_valid_y, burnin_invalid_x, burnin_invalid_y, edges, samples_data
 
 
 def visualize_bug_trap_path(path_file='bugtrap_path.csv', output_file='bugtrap_visualization.pdf', 
@@ -176,7 +191,8 @@ def visualize_bug_trap_path(path_file='bugtrap_path.csv', output_file='bugtrap_v
     edges = []
     samples_data = []
     if samples_file and os.path.exists(samples_file):
-        valid_x, valid_y, invalid_x, invalid_y, edges, samples_data = load_samples(samples_file)
+        valid_x, valid_y, invalid_x, invalid_y, burnin_valid_x, burnin_valid_y, \
+        burnin_invalid_x, burnin_invalid_y, edges, samples_data = load_samples(samples_file)
         
         # Plot 1: Main plot with tree edges and samples
         if edges:
@@ -186,11 +202,19 @@ def visualize_bug_trap_path(path_file='bugtrap_path.csv', output_file='bugtrap_v
                         'b-', linewidth=0.8, alpha=0.4, zorder=1)
         
         if valid_x is not None:
-            # Plot valid samples in green
+            # Plot burn-in samples first (so they're in the background)
+            if burnin_valid_x:
+                ax1.scatter(burnin_valid_x, burnin_valid_y, c='#00FFFF', s=8, alpha=0.4, 
+                          label='Burn-in Valid', zorder=1, edgecolors='none', marker='.')
+            if burnin_invalid_x:
+                ax1.scatter(burnin_invalid_x, burnin_invalid_y, c='#FF00FF', s=8, alpha=0.3,
+                          label='Burn-in Invalid', zorder=1, edgecolors='none', marker='.')
+            
+            # Plot planning phase valid samples in green
             if valid_x:
                 ax1.scatter(valid_x, valid_y, c='#2ecc71', s=15, alpha=0.7, 
                           label='Valid Samples', zorder=3, edgecolors='none')
-            # Plot invalid samples in red
+            # Plot planning phase invalid samples in red
             if invalid_x:
                 ax1.scatter(invalid_x, invalid_y, c='#e74c3c', s=15, alpha=0.6,
                           label='Invalid Samples', zorder=2, edgecolors='none')
@@ -204,6 +228,21 @@ def visualize_bug_trap_path(path_file='bugtrap_path.csv', output_file='bugtrap_v
                         'b-', linewidth=0.8, alpha=0.4, zorder=1)
         
         if samples_data:
+            # Plot burn-in samples on second plot too (with appropriate colors)
+            for sample in samples_data:
+                if sample.get('phase') == 'burnin':
+                    x, y = sample['x'], sample['y']
+                    is_valid = sample['is_valid']
+                    sampler = sample['sampler']
+                    
+                    # Burn-in samples: cyan for valid, magenta for invalid
+                    face_color = '#00FFFF' if is_valid else '#FF00FF'
+                    edge_color = '#2ecc71' if is_valid else '#e74c3c'
+                    
+                    ax2.scatter(x, y, c=face_color, s=12, alpha=0.5, 
+                              edgecolors=edge_color, linewidths=1.5, zorder=2, marker='.')
+            
+            # Plot planning phase samples
             # Define sampler colors - more distinctive colors
             # Map all possible sampler types to colors
             sampler_colors = {
@@ -219,6 +258,10 @@ def visualize_bug_trap_path(path_file='bugtrap_path.csv', output_file='bugtrap_v
             }
             
             for sample in samples_data:
+                # Skip burn-in samples (already plotted above)
+                if sample.get('phase') == 'burnin':
+                    continue
+                    
                 x, y = sample['x'], sample['y']
                 is_valid = sample['is_valid']
                 sampler = sample['sampler']

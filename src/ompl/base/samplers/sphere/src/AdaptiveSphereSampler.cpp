@@ -17,7 +17,6 @@
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 using namespace ompl::sampling;
 using namespace ompl::geometry;
-using namespace ompl::statistics;
 
 AdaptiveSphereSampler::AdaptiveSphereSampler(const base::SpaceInformation *si, int sampleSize, double radius, const std::vector<int>& axesIndices)
     : ValidStateSampler(si),
@@ -137,19 +136,7 @@ void AdaptiveSphereSampler::popIndexFromIndices(int index, bool valid)
 
 void AdaptiveSphereSampler::addValidSampleToComponent(Point& p)
 {
-    if (p.sampledByCylinder != true)
-    {
-        auto& components = vmfSampler_.getComponents();
-        if (p.componentID >= 0 && p.componentID < components.size()) {
-            components.at(p.componentID).points.push_back(p);
-            updateComponentCenter(p.componentID);
-            
-            if (p.sampledAtKappa > 0.0 && p.sampledAtKappa > components.at(p.componentID).kappa)
-            {
-                components.at(p.componentID).kappa = p.sampledAtKappa;
-            }
-        }
-    }
+    // VMF functionality removed - no longer used
     allValidPoints_.push_back(p);
     
     // Mark cache as dirty since we added a new point
@@ -176,7 +163,7 @@ void AdaptiveSphereSampler::clearSamples()
     indices_.clear();
     allValidPoints_.clear();
     allPoints_cached_.clear();
-    vmfSampler_.getComponents().clear();
+    // VMF functionality removed
     bestRadius_ = 0.0;
     bestRadius = 0.0;
 }
@@ -196,11 +183,6 @@ double AdaptiveSphereSampler::getValidSampleRate() const
 {
     if (spherePoints_.empty()) return 0.0;
     return static_cast<double>(allPoints_cached_.size()) / static_cast<double>(spherePoints_.size());
-}
-
-AdaptiveSphereSampler::Point AdaptiveSphereSampler::sampleFromVMF(int componentID, double newRadius, double kappaMultiplier)
-{
-    return vmfSampler_.sampleFromComponent(componentID, newRadius, kappaMultiplier, rng_);
 }
 
 AdaptiveSphereSampler::Point AdaptiveSphereSampler::getRandomSampleFromCylinder(double extensionHeight, int chosenDirection)
@@ -265,22 +247,6 @@ void AdaptiveSphereSampler::updateCylinderAxis()
 
     // 3. Store the stabilized axis
     cylinderAxis_ = newAxisRaw;
-}
-
-std::vector<AdaptiveSphereSampler::VMFComponent> AdaptiveSphereSampler::fitVMFMixtureModel(int K, int maxIter, double tol)
-{
-    vmfSampler_.fit(allValidPoints_, K, maxIter, tol, rng_);
-    return vmfSampler_.getComponents();
-}
-
-int AdaptiveSphereSampler::selectComponent()
-{
-    return vmfSampler_.selectComponent(rng_);
-}
-
-void AdaptiveSphereSampler::updateComponentCenter(int componentIndex)
-{
-    vmfSampler_.updateComponentCenter(componentIndex);
 }
 
 void AdaptiveSphereSampler::appendFibonacciSamples(double customRadius)

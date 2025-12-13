@@ -58,19 +58,13 @@ if (OMPL_BUILD_DEMOS)
 
     add_ompl_demo(demo_SpaceTimePlanning SpaceTimePlanning.cpp)
 
-    # RRTFINALIZED Demo - Custom disassembly RRT planner
-    add_ompl_demo(demo_RRTFinalizedDemo disassembly/RRTFINALIZEDDemo.cpp)
-    target_link_libraries(demo_RRTFinalizedDemo PRIVATE yaml-cpp::yaml-cpp)
-    
-    # 2D Sampling Test
-    add_ompl_demo(test_2d_sampling disassembly/test_2d_sampling.cpp)
-    
-    # 2D Burn-in Test
-    add_ompl_demo(test_burnin_2d disassembly/test_burnin_2d.cpp)
+    # MAB-SSRRT Demo - Multi-Armed Bandit Sphere-Sampled RRT planner
+    add_ompl_demo(demo_MAB_SSRRT disassembly/MAB_SSRRT_Demo.cpp)
+    target_link_libraries(demo_MAB_SSRRT PRIVATE yaml-cpp::yaml-cpp)
     
     # Copy config file to build directory
     configure_file(
-        ${CMAKE_SOURCE_DIR}/config/benchmark_baseline.yaml
+        ${CMAKE_CURRENT_SOURCE_DIR}/disassembly/benchmark_baseline.yaml
         ${CMAKE_CURRENT_BINARY_DIR}/benchmark_baseline.yaml
         COPYONLY)
 

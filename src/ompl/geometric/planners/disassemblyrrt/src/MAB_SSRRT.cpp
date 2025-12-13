@@ -35,7 +35,7 @@
 /* Author: Servet Bora Bayraktar */
 
 /**
- * @file MAB_SSRRT_1L.cpp
+ * @file MAB_SSRRT.cpp
  * @brief Implementation of MAB-SSRRT-1L (Single-Layer MAB variant)
  * 
  * This file implements the single-layer Multi-Armed Bandit Sphere-Sampled RRT.
@@ -43,7 +43,7 @@
  * nested 2-arm MABs.
  */
 
-#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_1L.h"
+#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h"
 #include <limits>
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include "ompl/base/goals/GoalSampleableRegion.h"
@@ -60,7 +60,7 @@
  * 2. YAML-based parameter loading
  * 3. Single 3-arm MAB for sampling strategy selection
  */
-ompl::geometric::MAB_SSRRT_1L::MAB_SSRRT_1L(
+ompl::geometric::MAB_SSRRT::MAB_SSRRT(
     const base::SpaceInformationPtr& si, 
     const std::string& yamlFilePath)
     : base::Planner(si, "MAB-SSRRT-1L")
@@ -69,10 +69,10 @@ ompl::geometric::MAB_SSRRT_1L::MAB_SSRRT_1L(
     specs_.directed = true;
     
     // Declare configurable parameters for OMPL's parameter system
-    Planner::declareParam<double>("range", this, &MAB_SSRRT_1L::setRange, 
-                                  &MAB_SSRRT_1L::getRange, "0.:1.:10000.");
-    Planner::declareParam<double>("goal_bias", this, &MAB_SSRRT_1L::setGoalBias, 
-                                  &MAB_SSRRT_1L::getGoalBias, "0.:.05:1.");
+    Planner::declareParam<double>("range", this, &MAB_SSRRT::setRange, 
+                                  &MAB_SSRRT::getRange, "0.:1.:10000.");
+    Planner::declareParam<double>("goal_bias", this, &MAB_SSRRT::setGoalBias, 
+                                  &MAB_SSRRT::getGoalBias, "0.:.05:1.");
 
     // Load all configuration from YAML file
     loadYAMLConfig(yamlFilePath);
@@ -97,7 +97,7 @@ ompl::geometric::MAB_SSRRT_1L::MAB_SSRRT_1L(
  * - Reward system configuration
  * - Cylinder sampling configuration
  */
-void ompl::geometric::MAB_SSRRT_1L::loadYAMLConfig(const std::string& yamlFilePath)
+void ompl::geometric::MAB_SSRRT::loadYAMLConfig(const std::string& yamlFilePath)
 {
     try
     {
@@ -186,7 +186,7 @@ void ompl::geometric::MAB_SSRRT_1L::loadYAMLConfig(const std::string& yamlFilePa
 // DESTRUCTOR & CLEANUP
 // =============================================================================
 
-ompl::geometric::MAB_SSRRT_1L::~MAB_SSRRT_1L()
+ompl::geometric::MAB_SSRRT::~MAB_SSRRT()
 {
     freeMemory();
 }
@@ -195,7 +195,7 @@ ompl::geometric::MAB_SSRRT_1L::~MAB_SSRRT_1L()
  * Resets planner state for a new planning episode.
  * Called by clear() and when replanning.
  */
-void ompl::geometric::MAB_SSRRT_1L::clear()
+void ompl::geometric::MAB_SSRRT::clear()
 {
     Planner::clear();
     sampler_.reset();
@@ -207,7 +207,7 @@ void ompl::geometric::MAB_SSRRT_1L::clear()
     cylinderValidStreak_ = 0;
 }
 
-void ompl::geometric::MAB_SSRRT_1L::setup()
+void ompl::geometric::MAB_SSRRT::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
@@ -224,7 +224,7 @@ void ompl::geometric::MAB_SSRRT_1L::setup()
 /**
  * Frees all Motion nodes and sampling arms.
  */
-void ompl::geometric::MAB_SSRRT_1L::freeMemory()
+void ompl::geometric::MAB_SSRRT::freeMemory()
 {
     std::vector<Motion*> motions;
     
@@ -251,7 +251,7 @@ void ompl::geometric::MAB_SSRRT_1L::freeMemory()
  * - Arm 0: Cylinder sampler (XYZ only, uses adaptive sphere)
  * - Arm 1: Uniform sampler (all dimensions)
  */
-void ompl::geometric::MAB_SSRRT_1L::initializeArms()
+void ompl::geometric::MAB_SSRRT::initializeArms()
 {
     samplingArms_.clear();
     createCylinderSamplingArm();
@@ -270,7 +270,7 @@ void ompl::geometric::MAB_SSRRT_1L::initializeArms()
  *         This is controlled by the axesMask {1,1} where:
  *         - Both ones: Sample XY
  */
-void ompl::geometric::MAB_SSRRT_1L::createCylinderSamplingArm()
+void ompl::geometric::MAB_SSRRT::createCylinderSamplingArm()
 {
     int stateDim = si_->getStateDimension();
     std::vector<int> cylinderAxesMask;
@@ -308,7 +308,7 @@ void ompl::geometric::MAB_SSRRT_1L::createCylinderSamplingArm()
  * - 2D: axesMask {1,1} means sample all 2 dimensions
  * - 6D: axesMask {1,1,1,1,1,1} means sample all 6 dimensions
  */
-void ompl::geometric::MAB_SSRRT_1L::createUniformSamplingArm()
+void ompl::geometric::MAB_SSRRT::createUniformSamplingArm()
 {
     int stateDim = si_->getStateDimension();
     std::vector<int> uniformAxesMask(stateDim, 1);  // Sample all dimensions
@@ -323,7 +323,7 @@ void ompl::geometric::MAB_SSRRT_1L::createUniformSamplingArm()
  * Copies a sample vector (x,y,z) into an OMPL state.
  * Uses the axesMask to determine which dimensions to fill.
  */
-void ompl::geometric::MAB_SSRRT_1L::copySampleVectorIntoState(
+void ompl::geometric::MAB_SSRRT::copySampleVectorIntoState(
     base::State* sample_state, 
     SamplingArm& hypothesis,
     std::vector<double> vec)
@@ -348,7 +348,7 @@ void ompl::geometric::MAB_SSRRT_1L::copySampleVectorIntoState(
 /**
  * Samples uniformly across all state space dimensions.
  */
-void ompl::geometric::MAB_SSRRT_1L::sampleUniformHypothesis(base::State* sample_state)
+void ompl::geometric::MAB_SSRRT::sampleUniformHypothesis(base::State* sample_state)
 {
     uniformRealVecSampler_->sampleSelectedIndices(sample_state, samplingArms_.at(1)->axesIndices);
 }
@@ -357,7 +357,7 @@ void ompl::geometric::MAB_SSRRT_1L::sampleUniformHypothesis(base::State* sample_
  * Computes the validity rate of samples at the current radius.
  * Used during burn-in to adjust the sampling radius.
  */
-double ompl::geometric::MAB_SSRRT_1L::computeValidityRate()
+double ompl::geometric::MAB_SSRRT::computeValidityRate()
 {
     base::State* sample_state = si_->allocState();
     base::State* origin_state = si_->allocState();
@@ -395,7 +395,7 @@ double ompl::geometric::MAB_SSRRT_1L::computeValidityRate()
  * 2. Finds the optimal sampling radius
  * 3. Seeds the cylinder sampler with valid samples
  */
-void ompl::geometric::MAB_SSRRT_1L::setupAdaptiveSphereSampling()
+void ompl::geometric::MAB_SSRRT::setupAdaptiveSphereSampling()
 {
     // First, check if uniform sampling works well (problem is "easy")
     if (performInitialUniformCheck())
@@ -411,7 +411,7 @@ void ompl::geometric::MAB_SSRRT_1L::setupAdaptiveSphereSampling()
  * Tests if uniform sampling has high validity rate.
  * If yes, skip the expensive adaptive sphere burn-in.
  */
-bool ompl::geometric::MAB_SSRRT_1L::performInitialUniformCheck()
+bool ompl::geometric::MAB_SSRRT::performInitialUniformCheck()
 {
     if (initialNumberOfUniformSampleTrials_ <= 0)
     {
@@ -468,7 +468,7 @@ bool ompl::geometric::MAB_SSRRT_1L::performInitialUniformCheck()
  * 4. If too high: grow radius, discard samples
  * 5. Repeat until in target range or max steps reached
  */
-void ompl::geometric::MAB_SSRRT_1L::performAdaptiveBurnin()
+void ompl::geometric::MAB_SSRRT::performAdaptiveBurnin()
 {
     auto& sphere = samplingArms_.at(0)->sphere;
     sphere->setPCAFilterTopPercent(pcaFilterTopPercent_);
@@ -503,7 +503,7 @@ void ompl::geometric::MAB_SSRRT_1L::performAdaptiveBurnin()
     finalizeBurnin(sphere, current_radius);
 }
 
-bool ompl::geometric::MAB_SSRRT_1L::shouldExitEarlyOnFullValidity(
+bool ompl::geometric::MAB_SSRRT::shouldExitEarlyOnFullValidity(
     double validity_rate,
     int& consecutive_count,
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere)
@@ -531,13 +531,13 @@ bool ompl::geometric::MAB_SSRRT_1L::shouldExitEarlyOnFullValidity(
     return false;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L::isValidityRateInTargetRange(double validity_rate) const
+bool ompl::geometric::MAB_SSRRT::isValidityRateInTargetRange(double validity_rate) const
 {
     return (validity_rate > adaptiveMinExpectedValidityRate_ &&
             validity_rate <= adaptiveMaxExpectedValidityRate_);
 }
 
-double ompl::geometric::MAB_SSRRT_1L::adjustRadiusBasedOnValidity(
+double ompl::geometric::MAB_SSRRT::adjustRadiusBasedOnValidity(
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
     double current_radius,
     double validity_rate)
@@ -558,7 +558,7 @@ double ompl::geometric::MAB_SSRRT_1L::adjustRadiusBasedOnValidity(
     return current_radius;
 }
 
-void ompl::geometric::MAB_SSRRT_1L::finalizeBurnin(
+void ompl::geometric::MAB_SSRRT::finalizeBurnin(
     std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
     double final_radius)
 {
@@ -588,7 +588,7 @@ void ompl::geometric::MAB_SSRRT_1L::finalizeBurnin(
  *   Arm 1 = CYLINDER_UP
  *   Arm 2 = CYLINDER_DOWN
  */
-void ompl::geometric::MAB_SSRRT_1L::updateRewards(bool isValid, MABPath selectedMABPath)
+void ompl::geometric::MAB_SSRRT::updateRewards(bool isValid, MABPath selectedMABPath)
 {
     double reward = 0.0;
     int armIndex = -1;
@@ -632,7 +632,7 @@ void ompl::geometric::MAB_SSRRT_1L::updateRewards(bool isValid, MABPath selected
  * 
  * Returns: true if valid sample generated, false otherwise
  */
-bool ompl::geometric::MAB_SSRRT_1L::getSample(
+bool ompl::geometric::MAB_SSRRT::getSample(
     base::State *sample_state, 
     Motion* tempMotion, 
     double extensionFactor, 
@@ -706,7 +706,7 @@ bool ompl::geometric::MAB_SSRRT_1L::getSample(
     return isSampleValid;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L::checkSamplingPrerequisites(
+bool ompl::geometric::MAB_SSRRT::checkSamplingPrerequisites(
     base::State* sample_state,
     bool* isGoalSampleOut)
 {
@@ -741,8 +741,8 @@ bool ompl::geometric::MAB_SSRRT_1L::checkSamplingPrerequisites(
  * 
  * This is simpler than the 2L variant which uses nested MABs.
  */
-ompl::geometric::MAB_SSRRT_1L::SamplerArm 
-ompl::geometric::MAB_SSRRT_1L::selectSamplingArm()
+ompl::geometric::MAB_SSRRT::SamplerArm 
+ompl::geometric::MAB_SSRRT::selectSamplingArm()
 {
     // Check for forced uniform after consecutive cylinder success
     if (forcedUniformAfterCylinderValidStreak_ > 0 &&
@@ -789,7 +789,7 @@ ompl::geometric::MAB_SSRRT_1L::selectSamplingArm()
  * Checks if we should sample from the goal region.
  * Goal bias is different for uniform vs cylinder arms.
  */
-bool ompl::geometric::MAB_SSRRT_1L::shouldSampleGoal(
+bool ompl::geometric::MAB_SSRRT::shouldSampleGoal(
     bool* isGoalSampleOut,
     Motion** nearestMotionOut,
     base::State* sample_state)
@@ -820,7 +820,7 @@ bool ompl::geometric::MAB_SSRRT_1L::shouldSampleGoal(
 // =============================================================================
 
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L::generateAndValidateSample(
+bool ompl::geometric::MAB_SSRRT::generateAndValidateSample(
     base::State* sample_state,
     ValidateFunc& validateState,
     double radius,
@@ -850,7 +850,7 @@ bool ompl::geometric::MAB_SSRRT_1L::generateAndValidateSample(
  * so we just use whichever arm was chosen.
  */
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L::sampleFromCylinder(
+bool ompl::geometric::MAB_SSRRT::sampleFromCylinder(
     base::State* sample_state,
     ValidateFunc& validateState,
     double radius,
@@ -897,7 +897,7 @@ bool ompl::geometric::MAB_SSRRT_1L::sampleFromCylinder(
 }
 
 template <typename ValidateFunc>
-bool ompl::geometric::MAB_SSRRT_1L::fallbackToUniform(
+bool ompl::geometric::MAB_SSRRT::fallbackToUniform(
     base::State* sample_state,
     ValidateFunc& validateState,
     MABPath& selectedMABPath)
@@ -908,7 +908,7 @@ bool ompl::geometric::MAB_SSRRT_1L::fallbackToUniform(
     return validateState(sample_state);
 }
 
-void ompl::geometric::MAB_SSRRT_1L::updateSamplingStatistics(
+void ompl::geometric::MAB_SSRRT::updateSamplingStatistics(
     MABPath selectedMABPath,
     bool isSampleValid,
     base::State* /*sample_state*/,
@@ -927,8 +927,8 @@ void ompl::geometric::MAB_SSRRT_1L::updateSamplingStatistics(
 // SOLVE HELPER METHODS
 // =============================================================================
 
-ompl::geometric::MAB_SSRRT_1L::Motion* 
-ompl::geometric::MAB_SSRRT_1L::addMotionToTree(
+ompl::geometric::MAB_SSRRT::Motion* 
+ompl::geometric::MAB_SSRRT::addMotionToTree(
     base::State* state, Motion* parent, MotionOrigin origin)
 {
     auto* motion = new Motion(si_);
@@ -939,7 +939,7 @@ ompl::geometric::MAB_SSRRT_1L::addMotionToTree(
     return motion;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L::checkAndUpdateSolution(
+bool ompl::geometric::MAB_SSRRT::checkAndUpdateSolution(
     Motion* motion, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
 {
@@ -970,8 +970,8 @@ bool ompl::geometric::MAB_SSRRT_1L::checkAndUpdateSolution(
  * 2. Try non-exhausted CYLINDER nodes
  * 3. Fall back to nearest neighbor
  */
-ompl::geometric::MAB_SSRRT_1L::Motion* 
-ompl::geometric::MAB_SSRRT_1L::findBestMotionForGoal(
+ompl::geometric::MAB_SSRRT::Motion* 
+ompl::geometric::MAB_SSRRT::findBestMotionForGoal(
     base::State* goalState, Motion* queryMotion)
 {
     std::vector<Motion*> motions;
@@ -1018,7 +1018,7 @@ ompl::geometric::MAB_SSRRT_1L::findBestMotionForGoal(
     return nn_->nearest(queryMotion);
 }
 
-ompl::base::State* ompl::geometric::MAB_SSRRT_1L::applyDistanceLimit(
+ompl::base::State* ompl::geometric::MAB_SSRRT::applyDistanceLimit(
     Motion* from, base::State* to, base::State* buffer, double distance)
 {
     if (distance > maxDistance_)
@@ -1029,7 +1029,7 @@ ompl::base::State* ompl::geometric::MAB_SSRRT_1L::applyDistanceLimit(
     return to;
 }
 
-bool ompl::geometric::MAB_SSRRT_1L::handleGoalSamplePath(
+bool ompl::geometric::MAB_SSRRT::handleGoalSamplePath(
     base::State* rstate, base::State* xstate,
     Motion* rmotion, base::State* originState, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
@@ -1086,7 +1086,7 @@ bool ompl::geometric::MAB_SSRRT_1L::handleGoalSamplePath(
  * For UNIFORM samples:
  * - Apply step-wise distance limit (traditional RRT extension)
  */
-bool ompl::geometric::MAB_SSRRT_1L::handleNormalSamplePath(
+bool ompl::geometric::MAB_SSRRT::handleNormalSamplePath(
     base::State* rstate, base::State* xstate,
     Motion* nearestMotion, base::Goal* goal,
     Motion*& solution, Motion*& approxsol, double& approxdif)
@@ -1135,7 +1135,7 @@ bool ompl::geometric::MAB_SSRRT_1L::handleNormalSamplePath(
  *    c. Check for goal connection
  * 4. Build solution path
  */
-ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_1L::solve(
+ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT::solve(
     const base::PlannerTerminationCondition& ptc)
 {
     checkValidity();
@@ -1270,7 +1270,7 @@ ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_1L::solve(
                     base::PlannerStatus::TIMEOUT;
 }
 
-void ompl::geometric::MAB_SSRRT_1L::getPlannerData(base::PlannerData &data) const
+void ompl::geometric::MAB_SSRRT::getPlannerData(base::PlannerData &data) const
 {
     Planner::getPlannerData(data);
 
