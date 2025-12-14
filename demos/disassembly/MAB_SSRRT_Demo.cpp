@@ -51,6 +51,7 @@
 #include <memory>
 #include <fstream>
 #include <iomanip>
+#include <filesystem>
 
 // OMPL includes
 #include <ompl/base/spaces/RealVectorStateSpace.h>
@@ -282,38 +283,49 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
             // In debug mode, path with samplers is already exported by the planner
             // Only save basic path if not in debug mode
             if (!debug) {
-                // Save path to file for visualization
-                // Try multiple locations
-                std::vector<std::string> possiblePaths = {
-                    "bugtrap_path.csv",
-                    "../bugtrap_path.csv",
-                    "../../bugtrap_path.csv",
-                    "/tmp/bugtrap_path.csv"
-                };
-                
-                bool saved = false;
-                for (const auto& pathFile : possiblePaths)
-                {
-                    std::ofstream outFile(pathFile);
-                    if (outFile.is_open())
-                    {
-                        outFile << std::fixed << std::setprecision(6);
-                        outFile << "x,y\n";
-                        for (std::size_t i = 0; i < path->getStateCount(); ++i)
-                        {
-                            const auto* state = path->getState(i)->as<ob::RealVectorStateSpace::StateType>();
-                            outFile << state->values[0] << "," << state->values[1] << "\n";
-                        }
-                        outFile.close();
-                        std::cout << "[INFO] Path saved to: " << pathFile << std::endl;
-                        saved = true;
-                        break;
-                    }
+                // Save path to demos/disassembly/ directory (absolute path from config)
+                std::filesystem::path configFilePath(configPath);
+                if (!configFilePath.is_absolute()) {
+                    configFilePath = std::filesystem::absolute(configFilePath);
                 }
                 
-                if (!saved)
+                // Find demos/disassembly/ directory by looking for it in the config path
+                std::filesystem::path currentPath = configFilePath.parent_path();
+                std::filesystem::path targetDir;
+                
+                // Search up the directory tree for demos/disassembly/
+                while (!currentPath.empty() && currentPath != currentPath.root_path()) {
+                    std::filesystem::path testPath = currentPath / "demos" / "disassembly";
+                    if (std::filesystem::exists(testPath) && std::filesystem::is_directory(testPath)) {
+                        targetDir = testPath;
+                        break;
+                    }
+                    currentPath = currentPath.parent_path();
+                }
+                
+                // If not found, use the config file's directory (assuming config is in demos/disassembly/)
+                if (targetDir.empty()) {
+                    targetDir = configFilePath.parent_path();
+                }
+                
+                std::string pathFile = targetDir.string() + "/bugtrap_path.csv";
+                
+                std::ofstream outFile(pathFile);
+                if (outFile.is_open())
                 {
-                    std::cerr << "[WARNING] Could not save path to file!" << std::endl;
+                    outFile << std::fixed << std::setprecision(6);
+                    outFile << "x,y\n";
+                    for (std::size_t i = 0; i < path->getStateCount(); ++i)
+                    {
+                        const auto* state = path->getState(i)->as<ob::RealVectorStateSpace::StateType>();
+                        outFile << state->values[0] << "," << state->values[1] << "\n";
+                    }
+                    outFile.close();
+                    std::cout << "[INFO] Path saved to: " << pathFile << std::endl;
+                }
+                else
+                {
+                    std::cerr << "[WARNING] Could not save path to file: " << pathFile << std::endl;
                 }
             } else {
                 std::cout << "[INFO] Path with sampler info exported by debug planner" << std::endl;
@@ -331,10 +343,10 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
     std::cout << "\n[STATS] Tree vertices: " << pdata.numVertices() << std::endl;
     std::cout << "[STATS] Tree edges: " << pdata.numEdges() << std::endl;
     
-    // Export debug data if in debug mode
+    // Export debug data if in debug mode (always to demos/disassembly/)
     if (debug && debugPlanner) {
         debugPlanner->exportSampleData("bugtrap_samples_debug.csv");
-        std::cout << "[DEBUG] Sample data exported to: bugtrap_samples_debug.csv" << std::endl;
+        std::cout << "[DEBUG] Sample data exported to: demos/disassembly/bugtrap_samples_debug.csv" << std::endl;
     }
 
     std::cout << "\n==================================================" << std::endl;
@@ -395,12 +407,14 @@ int main(int argc, char** argv)
         }
     }
 
+    // Default to demos/disassembly/benchmark_baseline.yaml if not specified
     if (configPath.empty())
     {
-        std::cerr << "Error: --config <path> is required" << std::endl;
-        printUsage(argv[0]);
-        return 1;
+        configPath = "demos/disassembly/benchmark_baseline.yaml";
     }
+    
+    // Note: We use the config path as-is. The planner will handle path resolution.
+    // No need to convert to absolute path here - it can cause buffer overflow issues.
 
     try
     {

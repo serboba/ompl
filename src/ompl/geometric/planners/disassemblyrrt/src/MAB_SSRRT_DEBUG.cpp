@@ -48,6 +48,7 @@
 #include <sstream>
 #include <map>
 #include <limits>
+#include <filesystem>
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include "ompl/base/goals/GoalSampleableRegion.h"
 #include "ompl/tools/config/SelfConfig.h"
@@ -99,7 +100,75 @@ void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFil
 {
     try
     {
-        YAML::Node config = YAML::LoadFile(yamlFilePath);
+        // Resolve the config file path to absolute (same logic as non-debug version)
+        std::filesystem::path configPath(yamlFilePath);
+        std::string resolvedConfigPath;
+        std::vector<std::string> pathsToTry;
+        
+        if (configPath.is_absolute()) {
+            pathsToTry.push_back(yamlFilePath);
+        } else {
+            std::filesystem::path cwd = std::filesystem::current_path();
+            
+            // If path starts with ../, try removing the ../ first (common case when running from root)
+            if (yamlFilePath.find("../") == 0) {
+                pathsToTry.push_back((cwd / yamlFilePath.substr(3)).lexically_normal().string());
+            }
+            
+            // Try 1: Resolve from current working directory
+            pathsToTry.push_back((cwd / configPath).lexically_normal().string());
+            
+            // Try 2: Original path as-is (might be relative to executable)
+            pathsToTry.push_back(yamlFilePath);
+            
+            // Try 3: If in build/ directory, try from parent
+            if (cwd.filename() == "build") {
+                pathsToTry.push_back((cwd.parent_path() / configPath).lexically_normal().string());
+                if (yamlFilePath.find("../") == 0) {
+                    pathsToTry.push_back((cwd.parent_path() / yamlFilePath.substr(3)).lexically_normal().string());
+                }
+            }
+        }
+        
+        // Find the first path that exists
+        bool found = false;
+        for (const auto& path : pathsToTry) {
+            if (std::filesystem::exists(path) && std::filesystem::is_regular_file(path)) {
+                try {
+                    resolvedConfigPath = std::filesystem::canonical(path).string();
+                    found = true;
+                    break;
+                } catch (const std::exception&) {
+                    resolvedConfigPath = path;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            std::string errorMsg = "Config file not found. Tried:\n";
+            for (const auto& path : pathsToTry) {
+                errorMsg += "  - " + path + "\n";
+            }
+            errorMsg += "Current directory: " + std::filesystem::current_path().string();
+            throw YAML::Exception(YAML::Mark::null_mark(), errorMsg);
+        }
+        
+        // Extract absolute path to demos/disassembly/ directory from resolved config file path
+        std::filesystem::path resolvedPath(resolvedConfigPath);
+        std::filesystem::path targetDir = resolvedPath.parent_path();
+        
+        // Convert to absolute path and ensure it ends with /
+        targetDir = std::filesystem::absolute(targetDir);
+        outputDirectory_ = targetDir.string();
+        if (!outputDirectory_.empty() && outputDirectory_.back() != '/') {
+            outputDirectory_ += "/";
+        }
+        
+        OMPL_INFORM("DEBUG: Output directory set to: %s", outputDirectory_.c_str());
+        
+        YAML::Node config = YAML::LoadFile(resolvedConfigPath);
 
         // ----- Goal Bias -----
         // Different bias values for uniform vs cylinder sampling
@@ -379,8 +448,8 @@ double ompl::geometric::MAB_SSRRT_DEBUG::computeValidityRate()
 
         bool validFlag = si_->checkMotion(origin_state, sample_state);
         
-        // DEBUG: Track sample
-        trackSample(sample_state, validFlag, "burnin", "cylinder", 0.0, sample.second.sampledAtRadius);
+        // DEBUG: Track sample (these are from AdaptiveSphereSampler during burn-in)
+        trackSample(sample_state, validFlag, "burnin", "sphere", 0.0, sample.second.sampledAtRadius);
         
         sphere->popIndexFromIndices(sample.first, validFlag);
     }
@@ -1064,9 +1133,24 @@ ompl::geometric::MAB_SSRRT_DEBUG::addMotionToTree(
                 }
             }
             
-            // If still not found, add a new tracking entry for this connected state
+            // If still not found, infer sampler from the origin parameter passed to this function
+            // This should rarely happen if tracking is working correctly, but use origin as fallback
             if (!found) {
-                trackSample(state, true, "planning", "connected", 0.0, 0.0, parent->state, true);
+                std::string inferredSampler = "uniform";  // Default fallback
+                if (origin == MotionOrigin::UNIFORM) {
+                    inferredSampler = "uniform";
+                } else if (origin == MotionOrigin::CYLINDER) {
+                    // For CYLINDER, we need to check which direction was used
+                    // Use selectedSamplerArm_ to determine if it's up or down
+                    if (selectedSamplerArm_ == SamplerArm::CYLINDER_UP) {
+                        inferredSampler = "cylinder_up";
+                    } else if (selectedSamplerArm_ == SamplerArm::CYLINDER_DOWN) {
+                        inferredSampler = "cylinder_down";
+                    } else {
+                        inferredSampler = "cylinder_up";  // Default to up if unknown
+                    }
+                }
+                trackSample(state, true, "planning", inferredSampler, 0.0, 0.0, parent->state, true);
             }
         }
     } else if (debugEnabled_ && parent == nullptr) {
@@ -1574,6 +1658,12 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
                 sampleStateToIndex_[key] = index;
             }
         }
+        
+        // Debug output for burn-in samples (first few only to avoid spam)
+        if (phase == "burnin" && debugSamples_.size() <= 5) {
+            OMPL_INFORM("DEBUG: Tracked burn-in sample #%zu: sampler=%s, valid=%d, radius=%.4f", 
+                       debugSamples_.size(), sampler.c_str(), isValid ? 1 : 0, radius);
+        }
     } catch (...) {
         // Silently ignore tracking errors to avoid crashes
     }
@@ -1582,21 +1672,14 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
 void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
     const std::string& filename, const std::vector<MAB_SSRRT::Motion*>& mpath) const
 {
-    // Try multiple locations
-    std::vector<std::string> possiblePaths = {
-        filename,
-        "../" + filename,
-        "../../" + filename,
-        "demos/" + filename,
-        "../demos/" + filename,
-        "/tmp/" + filename
-    };
+    // Always save to demos/disassembly/ directory (absolute path from config)
+    std::string pathFile = outputDirectory_ + filename;
     
-    bool saved = false;
-    for (const auto& pathFile : possiblePaths)
-    {
-        std::ofstream outFile(pathFile);
-        if (!outFile.is_open()) continue;
+    std::ofstream outFile(pathFile);
+    if (!outFile.is_open()) {
+        OMPL_WARN("Could not open file for writing: %s", pathFile.c_str());
+        return;
+    }
         
         outFile << std::fixed << std::setprecision(6);
         outFile << "x,y,sampler\n";
@@ -1637,56 +1720,43 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
         
         outFile.close();
         OMPL_INFORM("Path with samplers exported to: %s", pathFile.c_str());
-        saved = true;
-        break;
-    }
-    
-    if (!saved) {
-        OMPL_WARN("Could not save path with samplers to any location");
-    }
 }
 
 void ompl::geometric::MAB_SSRRT_DEBUG::exportSampleData(const std::string& filename) const
 {
-    // Try multiple locations (same as exportPathWithSamplers)
-    std::vector<std::string> possiblePaths = {
-        filename,
-        "../" + filename,
-        "../../" + filename,
-        "demos/" + filename,
-        "../demos/" + filename,
-        "/tmp/" + filename
-    };
+    // Always save to demos/disassembly/ directory (absolute path from config)
+    std::string sampleFile = outputDirectory_ + filename;
     
-    bool saved = false;
-    for (const auto& sampleFile : possiblePaths)
-    {
-        std::ofstream outFile(sampleFile);
-        if (!outFile.is_open()) continue;
-        
-        outFile << std::fixed << std::setprecision(6);
-        outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,was_connected,nearest_x,nearest_y\n";
-        
-        for (const auto& sample : debugSamples_) {
-            outFile << sample.x << "," << sample.y << ","
-                    << (sample.isValid ? "1" : "0") << ","
-                    << sample.phase << ","
-                    << sample.sampler << ","
-                    << sample.iteration << ","
-                    << sample.reward << ","
-                    << sample.radius << ","
-                    << (sample.wasConnected ? "1" : "0") << ","
-                    << sample.nearest_x << ","
-                    << sample.nearest_y << "\n";
-        }
-        
-        outFile.close();
-        OMPL_INFORM("Exported %zu debug samples to %s", debugSamples_.size(), sampleFile.c_str());
-        saved = true;
-        break;
+    std::ofstream outFile(sampleFile);
+    if (!outFile.is_open()) {
+        OMPL_WARN("Could not open file for writing: %s", sampleFile.c_str());
+        return;
     }
     
-    if (!saved) {
-        OMPL_WARN("Could not save debug samples to any location");
+    outFile << std::fixed << std::setprecision(6);
+    outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,was_connected,nearest_x,nearest_y\n";
+    
+    for (const auto& sample : debugSamples_) {
+        outFile << sample.x << "," << sample.y << ","
+                << (sample.isValid ? "1" : "0") << ","
+                << sample.phase << ","
+                << sample.sampler << ","
+                << sample.iteration << ","
+                << sample.reward << ","
+                << sample.radius << ","
+                << (sample.wasConnected ? "1" : "0") << ","
+                << sample.nearest_x << ","
+                << sample.nearest_y << "\n";
     }
+    
+    outFile.close();
+    OMPL_INFORM("Exported %zu debug samples to %s", debugSamples_.size(), sampleFile.c_str());
+    
+    // Debug: Count samples by phase
+    size_t burnin_count = 0, planning_count = 0;
+    for (const auto& s : debugSamples_) {
+        if (s.phase == "burnin") burnin_count++;
+        else if (s.phase == "planning") planning_count++;
+    }
+    OMPL_INFORM("DEBUG: Sample breakdown - burnin: %zu, planning: %zu", burnin_count, planning_count);
 }

@@ -427,6 +427,9 @@ namespace ompl {
             // Initial uniform check
             double initialFreeSamplingProbability_{0.5};
             int initialNumberOfUniformSampleTrials_{10};
+            
+            // Output directory for CSV files (derived from config file path)
+            std::string outputDirectory_;
 
             double sphereExtensionEps_{0.0};
             

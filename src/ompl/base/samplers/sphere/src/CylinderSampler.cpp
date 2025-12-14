@@ -8,13 +8,12 @@
 /* Author: Servet Bora Bayraktar */
 
 #include <ompl/base/samplers/sphere/CylinderSampler.h>
-#include <ompl/datastructures/statistics/CylinderFitter.h>
 #include <ompl/datastructures/geometry/GeometryUtils.h>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 using namespace ompl::sampling;
-using namespace ompl::statistics;
 using namespace ompl::geometry;
 
 CylinderSampler::CylinderSampler()
@@ -53,8 +52,7 @@ void CylinderSampler::fit(const std::vector<Point>& points, double pcaFilterTopP
         }
     }
 
-    cylinder_ = CylinderFitter::fitCylinder(pointsForFit);
-    hasValidCylinder_ = true;
+    cylinder_ = fitCylinderToPoints(pointsForFit);
     hasValidCylinder_ = true;
 }
 
@@ -238,4 +236,90 @@ CylinderSampler::Point CylinderSampler::samplePointInternal(const Cylinder& cyl,
 
         return Point{px, py, pz, newRadius_, true};
     }
+}
+
+// =============================================================================
+// Cylinder Fitting (merged from CylinderFitter)
+// =============================================================================
+
+void CylinderSampler::computeCovariance(const std::vector<Point>& points, Eigen::Matrix3d& cov)
+{
+    cov.setZero();
+    if (points.empty()) return;
+
+    // Compute centroid
+    Eigen::Vector3d centroid(0.0, 0.0, 0.0);
+    for (const auto& p : points)
+    {
+        centroid[0] += p.x;
+        centroid[1] += p.y;
+        centroid[2] += p.z;
+    }
+    centroid /= static_cast<double>(points.size());
+
+    // Compute covariance
+    for (const auto& p : points)
+    {
+        Eigen::Vector3d v(p.x - centroid[0], p.y - centroid[1], p.z - centroid[2]);
+        cov += v * v.transpose();
+    }
+    cov /= static_cast<double>(points.size());
+}
+
+CylinderSampler::Cylinder CylinderSampler::fitCylinderToPoints(const std::vector<Point>& points)
+{
+    Cylinder cyl;
+    if (points.empty()) return cyl;
+
+    // 1. Compute centroid
+    Point centroid{0.0, 0.0, 0.0};
+    for (const auto& p : points)
+    {
+        centroid.x += p.x;
+        centroid.y += p.y;
+        centroid.z += p.z;
+    }
+    centroid.x /= static_cast<double>(points.size());
+    centroid.y /= static_cast<double>(points.size());
+    centroid.z /= static_cast<double>(points.size());
+    
+    cyl.origin = centroid;
+
+    // 2. Compute PCA for direction
+    Eigen::Matrix3d cov;
+    computeCovariance(points, cov);
+    
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es(cov);
+    Eigen::Vector3d axis = es.eigenvectors().col(2); // Largest eigenvector
+    
+    cyl.direction = {axis[0], axis[1], axis[2]};
+    cyl.ax = axis[0];
+    cyl.ay = axis[1];
+    cyl.az = axis[2];
+
+    // 3. Compute radius and height
+    double maxDistSq = 0.0;
+    double minProj = std::numeric_limits<double>::max();
+    double maxProj = -std::numeric_limits<double>::max();
+
+    for (const auto& p : points)
+    {
+        Point diff{p.x - centroid.x, p.y - centroid.y, p.z - centroid.z};
+        double proj = GeometryUtils::dotProduct(diff, cyl.direction.x, cyl.direction.y, cyl.direction.z);
+        
+        if (proj < minProj) minProj = proj;
+        if (proj > maxProj) maxProj = proj;
+        
+        // Distance from axis
+        Point projVec{cyl.direction.x * proj, cyl.direction.y * proj, cyl.direction.z * proj};
+        Point perpVec{diff.x - projVec.x, diff.y - projVec.y, diff.z - projVec.z};
+        double distSq = perpVec.x * perpVec.x + perpVec.y * perpVec.y + perpVec.z * perpVec.z;
+        
+        if (distSq > maxDistSq) maxDistSq = distSq;
+    }
+
+    cyl.radius = std::sqrt(maxDistSq);
+    cyl.height = maxProj - minProj;
+    
+    return cyl;
 }

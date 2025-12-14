@@ -43,6 +43,7 @@
 
 #include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h"
 #include <limits>
+#include <filesystem>
 #include <ompl/base/spaces/SE3StateSpace.h>
 #include "ompl/base/goals/GoalSampleableRegion.h"
 #include "ompl/tools/config/SelfConfig.h"
@@ -61,7 +62,7 @@
 ompl::geometric::MAB_SSRRT::MAB_SSRRT(
     const base::SpaceInformationPtr& si, 
     const std::string& yamlFilePath)
-    : base::Planner(si, "MAB-SSRRT-1L")
+    : base::Planner(si, "MAB-SSRRT")
 {
     specs_.approximateSolutions = true;
     specs_.directed = true;
@@ -99,7 +100,62 @@ void ompl::geometric::MAB_SSRRT::loadYAMLConfig(const std::string& yamlFilePath)
 {
     try
     {
-        YAML::Node config = YAML::LoadFile(yamlFilePath);
+        // Resolve the config file path to absolute
+        std::filesystem::path configPath(yamlFilePath);
+        std::string resolvedPath;
+        std::vector<std::string> pathsToTry;
+        
+        if (configPath.is_absolute()) {
+            pathsToTry.push_back(yamlFilePath);
+        } else {
+            std::filesystem::path cwd = std::filesystem::current_path();
+            
+            // If path starts with ../, try removing the ../ first (common case when running from root)
+            if (yamlFilePath.find("../") == 0) {
+                pathsToTry.push_back((cwd / yamlFilePath.substr(3)).lexically_normal().string());
+            }
+            
+            // Try 1: Resolve from current working directory
+            pathsToTry.push_back((cwd / configPath).lexically_normal().string());
+            
+            // Try 2: Original path as-is (might be relative to executable)
+            pathsToTry.push_back(yamlFilePath);
+            
+            // Try 3: If in build/ directory, try from parent
+            if (cwd.filename() == "build") {
+                pathsToTry.push_back((cwd.parent_path() / configPath).lexically_normal().string());
+                if (yamlFilePath.find("../") == 0) {
+                    pathsToTry.push_back((cwd.parent_path() / yamlFilePath.substr(3)).lexically_normal().string());
+                }
+            }
+        }
+        
+        // Find the first path that exists
+        bool found = false;
+        for (const auto& path : pathsToTry) {
+            if (std::filesystem::exists(path) && std::filesystem::is_regular_file(path)) {
+                try {
+                    resolvedPath = std::filesystem::canonical(path).string();
+                    found = true;
+                    break;
+                } catch (const std::exception&) {
+                    resolvedPath = path;
+                    found = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!found) {
+            std::string errorMsg = "Config file not found. Tried:\n";
+            for (const auto& path : pathsToTry) {
+                errorMsg += "  - " + path + "\n";
+            }
+            errorMsg += "Current directory: " + std::filesystem::current_path().string();
+            throw YAML::Exception(YAML::Mark::null_mark(), errorMsg);
+        }
+        
+        YAML::Node config = YAML::LoadFile(resolvedPath);
 
         // ----- Goal Bias -----
         // Different bias values for uniform vs cylinder sampling

@@ -60,6 +60,10 @@ namespace ompl
             
             // Helper to sample a point
             Point samplePointInternal(const Cylinder& cyl, double extensionHeight, int direction, double maxRadius, std::mt19937& rng);
+            
+            // Cylinder fitting (merged from CylinderFitter)
+            static void computeCovariance(const std::vector<Point>& points, Eigen::Matrix3d& cov);
+            static Cylinder fitCylinderToPoints(const std::vector<Point>& points);
         };
     }
 }

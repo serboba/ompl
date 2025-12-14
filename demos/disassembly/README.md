@@ -40,9 +40,9 @@ The executable will be located at: `build/demos/demo_MAB_SSRRT`
 cd /home/serboba/transferompl_ws/src/ompl_iso/build
 export LD_LIBRARY_PATH=$PWD/src/ompl:$LD_LIBRARY_PATH
 
-# Run bug trap scenario (using config from build directory)
+# Run bug trap scenario (config file is in demos/disassembly/)
 ./demos/demo_MAB_SSRRT \
-    --config ./demos/benchmark_baseline.yaml \
+    --config ../demos/disassembly/benchmark_baseline.yaml \
     --planner bugtrap \
     --timeout 10
 ```
@@ -123,28 +123,38 @@ A constrained assembly planning scenario:
 After running the bug trap demo with `--debug`, visualize the results:
 
 ```bash
-cd /home/serboba/transferompl_ws/src/ompl_iso/build/demos
+cd /home/serboba/transferompl_ws/src/ompl_iso
 
-# Generate visualization
-python3 ../../demos/disassembly/visualize_bugtrap.py \
-    bugtrap_path.csv \
-    bugtrap_visualization_debug.pdf \
-    bugtrap_samples_debug.csv
+# Generate visualization (all files are in demos/disassembly/)
+python3 demos/disassembly/visualize_bugtrap.py
 ```
 
-**Output files:**
-- `bugtrap_visualization_debug.pdf` - High-resolution PDF visualization
-- `bugtrap_visualization_debug.png` - PNG version
+**Output files (all in `demos/disassembly/`):**
+- `bugtrap_path.csv` - Solution path with sampler information
+- `bugtrap_samples_debug.csv` - All sampled states with debug information
+- `bugtrap_visualization.pdf` - High-resolution PDF visualization
+- `bugtrap_visualization.png` - PNG version
 
 **What the visualization shows:**
 - **Left plot**: RRT tree with valid/invalid samples and edges
-- **Right plot**: Samples colored by sampler type (inner) and validity (border)
+- **Right plot**: Samples colored by sampler type and validity
+  - Blue: Valid uniform samples
+  - Magenta: Valid cylinder_up samples
+  - Deep Pink: Valid cylinder_down samples
+  - Orange: Invalid cylinder samples
+  - Red: Invalid uniform samples
+  - Cyan: Burn-in samples
 
 See `visualize_bugtrap.py` for more details.
 
 ## Configuration
 
-The demo requires a YAML configuration file. A default configuration is provided at `benchmark_baseline.yaml` in this directory.
+The demo requires a YAML configuration file. The default configuration is located at `demos/disassembly/benchmark_baseline.yaml`.
+
+**Important:** Always use the config file from `demos/disassembly/`:
+```bash
+--config ../demos/disassembly/benchmark_baseline.yaml
+```
 
 Key parameters:
 - `adaptive_quasirandom_sample_size`: Number of samples during burn-in
@@ -155,9 +165,15 @@ Key parameters:
 
 ## Output Files
 
+**All output files are saved to `demos/disassembly/` directory** (not in build/):
+
 When running with `--debug`, the demo generates:
-- `bugtrap_path.csv`: Solution path with sampler information
-- `bugtrap_samples_debug.csv`: All sampled states with debug information
+- `demos/disassembly/bugtrap_path.csv`: Solution path with sampler information
+- `demos/disassembly/bugtrap_samples_debug.csv`: All sampled states with debug information
+
+After running the visualization script:
+- `demos/disassembly/bugtrap_visualization.pdf`: PDF visualization
+- `demos/disassembly/bugtrap_visualization.png`: PNG visualization
 
 These files can be used for visualization and analysis.
 
