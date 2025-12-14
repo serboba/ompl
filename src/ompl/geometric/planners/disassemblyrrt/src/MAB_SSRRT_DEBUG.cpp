@@ -36,11 +36,10 @@
 
 /**
  * @file MAB_SSRRT_DEBUG.cpp
- * @brief Implementation of MAB-SSRRT-1L (Single-Layer MAB variant)
+ * @brief Implementation of MAB-SSRRT (Multi-Armed Bandit Sphere-Sampled RRT)
  * 
- * This file implements the single-layer Multi-Armed Bandit Sphere-Sampled RRT.
- * Key difference from 2L variant: Uses one flat MAB with 3 arms instead of
- * nested 2-arm MABs.
+ * This file implements the single-layer Multi-Armed Bandit Sphere-Sampled RRT
+ * with debug tracking.
  */
 
 #include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h"
