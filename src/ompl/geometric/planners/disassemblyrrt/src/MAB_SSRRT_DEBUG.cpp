@@ -167,6 +167,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFil
         }
         
         OMPL_INFORM("DEBUG: Output directory set to: %s", outputDirectory_.c_str());
+        OMPL_INFORM("DEBUG: Loading config from: %s", resolvedConfigPath.c_str());
         
         YAML::Node config = YAML::LoadFile(resolvedConfigPath);
 
@@ -184,7 +185,9 @@ void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFil
         adaptiveQuasirandomSampleSize_ = config["adaptive_quasirandom_sample_size"].as<int>();
         OMPL_INFORM("DEBUG: Loaded adaptive_quasirandom_sample_size = %d", adaptiveQuasirandomSampleSize_);
         adaptiveStartRadius_ = config["adaptive_start_radius"].as<double>();
+        OMPL_INFORM("DEBUG: Loaded adaptive_start_radius = %.10f", adaptiveStartRadius_);
         adaptiveMinRadius_ = config["adaptive_min_radius"].as<double>();
+        OMPL_INFORM("DEBUG: Loaded adaptive_min_radius = %.10f", adaptiveMinRadius_);
         adaptiveShrinkStep_ = config["adaptive_shrink_step"].as<double>();
         adaptiveGrowStep_ = config["adaptive_grow_step"].as<double>();
         adaptiveMinExpectedValidityRate_ = config["adaptive_min_expected_validity_rate"].as<double>();
@@ -272,6 +275,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::clear()
         nn_->clear();
     lastGoalMotion_ = nullptr;
     currentIteration_ = 0;
+    currentBurninStep_ = -1;
     cylinderValidStreak_ = 0;
     
     // DEBUG: Clear debug tracking
@@ -439,14 +443,22 @@ double ompl::geometric::MAB_SSRRT_DEBUG::computeValidityRate()
     auto& sphereHypothesis = *samplingArms_[0];
     auto& sphere = sphereHypothesis.sphere;
 
-    // Test each sphere sample for motion validity
+    // Test each sphere sample for validity
+    // Check both: (1) sample state is valid, (2) motion from origin to sample is valid
+    // This ensures we find samples that are both in free space AND reachable from start
     for (size_t i = 0; i < sphere->getSpherePoints().size(); i++)
     {
         auto sample = sphere->getSample();
         copySampleVectorIntoState(sample_state, sphereHypothesis,
                                   {sample.second.x, sample.second.y, sample.second.z});
+        si_->getStateSpace()->enforceBounds(sample_state);
 
-        bool validFlag = si_->checkMotion(origin_state, sample_state);
+        // Check if sample state itself is valid (in free space)
+        bool sampleStateValid = si_->isValid(sample_state);
+        // Also check if motion from origin to sample is valid (reachable)
+        bool motionValid = si_->checkMotion(origin_state, sample_state);
+        // Sample is valid only if both conditions are met
+        bool validFlag = sampleStateValid && motionValid;
         
         // DEBUG: Track sample (these are from AdaptiveSphereSampler during burn-in)
         trackSample(sample_state, validFlag, "burnin", "sphere", 0.0, sample.second.sampledAtRadius);
@@ -556,16 +568,19 @@ void ompl::geometric::MAB_SSRRT_DEBUG::performAdaptiveBurnin()
     double current_radius = adaptiveStartRadius_;
     
     int current_step = 0;
+    currentBurninStep_ = 0;  // Start burn-in step tracking
     int consecutive_full_validity_count = 0;
     
-    OMPL_INFORM("DEBUG: Initial radius = %.4f, min radius = %.4f", current_radius, adaptiveMinRadius_);
+    OMPL_INFORM("DEBUG: Initial radius = %.10f, min radius = %.10f", current_radius, adaptiveMinRadius_);
+    OMPL_INFORM("DEBUG: adaptiveStartRadius_ member variable = %.10f", adaptiveStartRadius_);
     
     while (current_radius > adaptiveMinRadius_)
     {
-        OMPL_INFORM("DEBUG: Burn-in step %d: radius = %.4f", current_step, current_radius);
+        currentBurninStep_ = current_step;  // Update current burn-in step
+        OMPL_INFORM("DEBUG: Burn-in step %d: radius = %.10f", current_step, current_radius);
         
         // Generate samples at current radius
-        OMPL_INFORM("DEBUG: Collecting %d quasi-random samples at radius %.4f", 
+        OMPL_INFORM("DEBUG: Collecting %d quasi-random samples at radius %.10f", 
                    adaptiveQuasirandomSampleSize_, current_radius);
         sphere->collectQuasiRandomSamples(current_radius);
         double validity_rate = computeValidityRate();
@@ -589,11 +604,14 @@ void ompl::geometric::MAB_SSRRT_DEBUG::performAdaptiveBurnin()
         // Adjust radius based on validity feedback
         double old_radius = current_radius;
         current_radius = adjustRadiusBasedOnValidity(sphere, current_radius, validity_rate);
-        OMPL_INFORM("DEBUG: Radius adjusted: %.4f -> %.4f", old_radius, current_radius);
+        OMPL_INFORM("DEBUG: Radius adjusted: %.10f -> %.10f (change: %.2f%%)", 
+                    old_radius, current_radius, 
+                    old_radius > 0 ? 100.0 * (current_radius - old_radius) / old_radius : 0.0);
         current_step++;
     }
     
-    OMPL_INFORM("DEBUG: Burn-in complete. Final radius = %.4f", current_radius);
+    OMPL_INFORM("DEBUG: Burn-in complete. Final radius = %.10f", current_radius);
+    currentBurninStep_ = -1;  // End burn-in step tracking
     finalizeBurnin(sphere, current_radius);
 }
 
@@ -636,17 +654,31 @@ double ompl::geometric::MAB_SSRRT_DEBUG::adjustRadiusBasedOnValidity(
     double current_radius,
     double validity_rate)
 {
+    OMPL_INFORM("DEBUG: adjustRadiusBasedOnValidity: validity_rate=%.6f, min=%.6f, max=%.6f, current_radius=%.10f", 
+                validity_rate, adaptiveMinExpectedValidityRate_, adaptiveMaxExpectedValidityRate_, current_radius);
+    
     if (validity_rate < adaptiveMinExpectedValidityRate_)
     {
         // Validity too low → shrink radius (keep valid samples)
+        double old_radius = current_radius;
         current_radius *= std::exp(-adaptiveShrinkStep_);
+        OMPL_INFORM("DEBUG: Shrinking radius: %.10f -> %.10f (exp(-%.6f) = %.6f)", 
+                    old_radius, current_radius, adaptiveShrinkStep_, std::exp(-adaptiveShrinkStep_));
         sphere->appendCachedValidSamples();
     }
     else if (validity_rate > adaptiveMaxExpectedValidityRate_)
     {
         // Validity too high → grow radius (discard samples)
-        current_radius *= std::exp(adaptiveGrowStep_);
+        double old_radius = current_radius;
+        double grow_factor = std::exp(adaptiveGrowStep_);
+        current_radius *= grow_factor;
+        OMPL_INFORM("DEBUG: Growing radius: %.10f -> %.10f (exp(%.6f) = %.6f, grow_step=%.6f)", 
+                    old_radius, current_radius, adaptiveGrowStep_, grow_factor, adaptiveGrowStep_);
         sphere->clearCachedValidSamples();
+    }
+    else
+    {
+        OMPL_INFORM("DEBUG: Validity rate in target range, no radius adjustment");
     }
 
     return current_radius;
@@ -1629,6 +1661,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
         sample.iteration = currentIteration_;
         sample.reward = reward;
         sample.radius = radius;
+        sample.burninStep = (phase == "burnin") ? currentBurninStep_ : -1;
         sample.wasConnected = wasConnected;
         
         // Extract nearest neighbor coordinates if provided
@@ -1661,7 +1694,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
         
         // Debug output for burn-in samples (first few only to avoid spam)
         if (phase == "burnin" && debugSamples_.size() <= 5) {
-            OMPL_INFORM("DEBUG: Tracked burn-in sample #%zu: sampler=%s, valid=%d, radius=%.4f", 
+            OMPL_INFORM("DEBUG: Tracked burn-in sample #%zu: sampler=%s, valid=%d, radius=%.10f", 
                        debugSamples_.size(), sampler.c_str(), isValid ? 1 : 0, radius);
         }
     } catch (...) {
@@ -1703,16 +1736,57 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
                 continue;
             }
             
-            // Determine sampler from MotionOrigin
+            // Determine sampler by looking up in debug samples
+            // This gives us the exact sampler (uniform, cylinder_up, cylinder_down) used
             std::string sampler = "unknown";
-            // Access bornFrom which is of type MAB_SSRRT::MotionOrigin
-            auto origin = motion->bornFrom;
-            if (origin == MAB_SSRRT::MotionOrigin::UNIFORM) {
-                sampler = "uniform";
-            } else if (origin == MAB_SSRRT::MotionOrigin::CYLINDER) {
-                // Default to cylinder_up - we can't determine UP/DOWN from MotionOrigin alone
-                // but this is better than nothing
-                sampler = "cylinder_up";
+            
+            // First try to find match in debug samples (check all samples, not just connected ones)
+            // Use reverse iteration to get the most recent match
+            bool found = false;
+            double bestDist = 1e10;
+            for (auto it = debugSamples_.rbegin(); it != debugSamples_.rend(); ++it) {
+                if (it->phase == "planning") {
+                    double dx = std::abs(it->x - x);
+                    double dy = std::abs(it->y - y);
+                    double dist = std::sqrt(dx*dx + dy*dy);
+                    // Use larger tolerance to account for distance limiting and state interpolation
+                    // Take the closest match within tolerance
+                    if (dist < 2.0 && dist < bestDist) {
+                        sampler = it->sampler;
+                        bestDist = dist;
+                        found = true;
+                    }
+                }
+            }
+            
+            // If still not found, try to match with any sample (including burn-in)
+            if (!found) {
+                for (auto it = debugSamples_.rbegin(); it != debugSamples_.rend(); ++it) {
+                    double dx = std::abs(it->x - x);
+                    double dy = std::abs(it->y - y);
+                    double dist = std::sqrt(dx*dx + dy*dy);
+                    if (dist < 2.0 && dist < bestDist) {
+                        sampler = it->sampler;
+                        bestDist = dist;
+                        found = true;
+                    }
+                }
+            }
+            
+            // If still not found, fall back to MotionOrigin (but this loses UP/DOWN distinction)
+            if (!found) {
+                auto origin = motion->bornFrom;
+                if (origin == MAB_SSRRT::MotionOrigin::UNIFORM) {
+                    sampler = "uniform";
+                } else if (origin == MAB_SSRRT::MotionOrigin::CYLINDER) {
+                    // Can't determine UP/DOWN from MotionOrigin, default to cylinder
+                    sampler = "cylinder";
+                }
+            }
+            
+            // Special case: first state is always "start"
+            if (i == static_cast<int>(mpath.size()) - 1) {
+                sampler = "start";
             }
             
             outFile << x << "," << y << "," << sampler << "\n";
@@ -1734,7 +1808,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportSampleData(const std::string& filen
     }
     
     outFile << std::fixed << std::setprecision(6);
-    outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,was_connected,nearest_x,nearest_y\n";
+    outFile << "x,y,is_valid,phase,sampler,iteration,reward,radius,burnin_step,was_connected,nearest_x,nearest_y\n";
     
     for (const auto& sample : debugSamples_) {
         outFile << sample.x << "," << sample.y << ","
@@ -1744,6 +1818,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportSampleData(const std::string& filen
                 << sample.iteration << ","
                 << sample.reward << ","
                 << sample.radius << ","
+                << sample.burninStep << ","
                 << (sample.wasConnected ? "1" : "0") << ","
                 << sample.nearest_x << ","
                 << sample.nearest_y << "\n";

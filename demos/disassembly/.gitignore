@@ -1,0 +1,25 @@
+# Exclude debug and experimental files from MAB-RRT branch
+# Generated data files
+*.csv
+*.pdf
+*.png
+
+# Debug planner files
+*_DEBUG*
+
+# Visualization and plotting scripts
+visualize_*.py
+plot_*.py
+
+# Benchmarking scripts
+benchmark_occupancy_grid.cpp
+
+# Generated directories
+grids/
+plots/
+scripts/
+
+# Visualization documentation (optional)
+VISUALIZATION_GENERATED.md
+VISUALIZATION_GUIDE.md
+VISUALIZATION_PROMPTS.md

@@ -462,6 +462,7 @@ namespace ompl {
             // ====================================================================
             
             unsigned int currentIteration_{0};
+            int currentBurninStep_{-1};  // Current burn-in step number (-1 if not in burn-in)
             int cylinderValidStreak_{0};
             SamplerArm selectedSamplerArm_{SamplerArm::UNIFORM};
             std::shared_ptr<base::RealVectorStateSampler> uniformRealVecSampler_;
@@ -479,6 +480,7 @@ namespace ompl {
                 int iteration;
                 double reward;
                 double radius;  // For sphere samples
+                int burninStep;  // Burn-in step number (-1 for planning phase)
                 // Connection/edge information
                 bool wasConnected;  // Whether this sample was connected to the tree
                 double nearest_x, nearest_y;  // Coordinates of nearest neighbor (if connected)

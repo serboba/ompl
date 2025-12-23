@@ -420,14 +420,23 @@ double ompl::geometric::MAB_SSRRT::computeValidityRate()
     auto& sphereHypothesis = *samplingArms_[0];
     auto& sphere = sphereHypothesis.sphere;
 
-    // Test each sphere sample for motion validity
+    // Test each sphere sample for validity
+    // Check both: (1) sample state is valid, (2) motion from origin to sample is valid
+    // This ensures we find samples that are both in free space AND reachable from start
     for (size_t i = 0; i < sphere->getSpherePoints().size(); i++)
     {
         auto sample = sphere->getSample();
         copySampleVectorIntoState(sample_state, sphereHypothesis,
                                   {sample.second.x, sample.second.y, sample.second.z});
+        si_->getStateSpace()->enforceBounds(sample_state);
 
-        bool validFlag = si_->checkMotion(origin_state, sample_state);
+        // Check if sample state itself is valid (in free space)
+        bool sampleStateValid = si_->isValid(sample_state);
+        // Also check if motion from origin to sample is valid (reachable)
+        bool motionValid = si_->checkMotion(origin_state, sample_state);
+        // Sample is valid only if both conditions are met
+        bool validFlag = sampleStateValid && motionValid;
+        
         sphere->popIndexFromIndices(sample.first, validFlag);
     }
     si_->getStateSpace()->enforceBounds(sample_state);
@@ -605,9 +614,11 @@ double ompl::geometric::MAB_SSRRT::adjustRadiusBasedOnValidity(
     else if (validity_rate > adaptiveMaxExpectedValidityRate_)
     {
         // Validity too high → grow radius (discard samples)
-        current_radius *= std::exp(adaptiveGrowStep_);
+        double grow_factor = std::exp(adaptiveGrowStep_);
+        current_radius *= grow_factor;
         sphere->clearCachedValidSamples();
     }
+    // Note: If validity_rate is exactly in target range, no adjustment is made
 
     return current_radius;
 }

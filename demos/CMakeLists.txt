@@ -62,6 +62,10 @@ if (OMPL_BUILD_DEMOS)
     add_ompl_demo(demo_MAB_SSRRT disassembly/MAB_SSRRT_Demo.cpp)
     target_link_libraries(demo_MAB_SSRRT PRIVATE yaml-cpp::yaml-cpp)
     
+    # MAB-SSRRT Benchmark - Compare planners on occupancy grid
+    add_ompl_demo(demo_benchmark_occupancy_grid disassembly/benchmark_occupancy_grid.cpp)
+    target_link_libraries(demo_benchmark_occupancy_grid PRIVATE yaml-cpp::yaml-cpp)
+    
     # Copy config file to build directory
     configure_file(
         ${CMAKE_CURRENT_SOURCE_DIR}/disassembly/benchmark_baseline.yaml
