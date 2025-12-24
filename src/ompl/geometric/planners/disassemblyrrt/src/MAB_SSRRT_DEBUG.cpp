@@ -67,7 +67,7 @@
 ompl::geometric::MAB_SSRRT_DEBUG::MAB_SSRRT_DEBUG(
     const base::SpaceInformationPtr& si, 
     const std::string& yamlFilePath)
-    : MAB_SSRRT(si, yamlFilePath)
+    : MAB_RRT(si, yamlFilePath)
 {
     // Base class constructor handles all initialization including mab_sampler_
     // Debug tracking is enabled by default (debugEnabled_ = true)
@@ -167,7 +167,6 @@ void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFil
         }
         
         OMPL_INFORM("DEBUG: Output directory set to: %s", outputDirectory_.c_str());
-        OMPL_INFORM("DEBUG: Loading config from: %s", resolvedConfigPath.c_str());
         
         YAML::Node config = YAML::LoadFile(resolvedConfigPath);
 
@@ -184,16 +183,33 @@ void ompl::geometric::MAB_SSRRT_DEBUG::loadYAMLConfig(const std::string& yamlFil
         // These control the burn-in phase that discovers constraint directions
         adaptiveQuasirandomSampleSize_ = config["adaptive_quasirandom_sample_size"].as<int>();
         OMPL_INFORM("DEBUG: Loaded adaptive_quasirandom_sample_size = %d", adaptiveQuasirandomSampleSize_);
-        adaptiveStartRadius_ = config["adaptive_start_radius"].as<double>();
-        OMPL_INFORM("DEBUG: Loaded adaptive_start_radius = %.10f", adaptiveStartRadius_);
-        adaptiveMinRadius_ = config["adaptive_min_radius"].as<double>();
-        OMPL_INFORM("DEBUG: Loaded adaptive_min_radius = %.10f", adaptiveMinRadius_);
-        adaptiveShrinkStep_ = config["adaptive_shrink_step"].as<double>();
-        adaptiveGrowStep_ = config["adaptive_grow_step"].as<double>();
+        // Bisection search parameters
+        adaptiveBisectionLowerRadius_ = config["adaptive_bisection_lower_radius"].as<double>();
+        adaptiveBisectionUpperRadius_ = config["adaptive_bisection_upper_radius"].as<double>();
+        adaptiveBisectionTolerance_ = config["adaptive_bisection_tolerance"] ? 
+                                      config["adaptive_bisection_tolerance"].as<double>() : 0.0001;
         adaptiveMinExpectedValidityRate_ = config["adaptive_min_expected_validity_rate"].as<double>();
         adaptiveMaxExpectedValidityRate_ = config["adaptive_max_expected_validity_rate"].as<double>();
         adaptiveBurninMaxSteps_ = config["adaptive_burnin_max_steps"] ? 
-                                  config["adaptive_burnin_max_steps"].as<int>() : 10;
+                                  config["adaptive_burnin_max_steps"].as<int>() : 50;
+        // Legacy parameters (kept for compatibility)
+        adaptiveStartRadius_ = config["adaptive_start_radius"] ? 
+                              config["adaptive_start_radius"].as<double>() : 0.1;
+        adaptiveMinRadius_ = config["adaptive_min_radius"] ? 
+                            config["adaptive_min_radius"].as<double>() : 0.00001;
+        adaptiveShrinkStep_ = config["adaptive_shrink_step"] ? 
+                             config["adaptive_shrink_step"].as<double>() : 0.05;
+        adaptiveGrowStep_ = config["adaptive_grow_step"] ? 
+                           config["adaptive_grow_step"].as<double>() : 0.9;
+        // Legacy parameters (kept for compatibility)
+        adaptiveStartRadius_ = config["adaptive_start_radius"] ? 
+                              config["adaptive_start_radius"].as<double>() : 0.5;
+        adaptiveMinRadius_ = config["adaptive_min_radius"] ? 
+                            config["adaptive_min_radius"].as<double>() : 0.01;
+        adaptiveShrinkStep_ = config["adaptive_shrink_step"] ? 
+                             config["adaptive_shrink_step"].as<double>() : 0.1;
+        adaptiveGrowStep_ = config["adaptive_grow_step"] ? 
+                           config["adaptive_grow_step"].as<double>() : 0.1;
 
         // ----- Initial Uniform Check -----
         // Early exit optimization if problem is "easy" (high uniform validity)
@@ -275,7 +291,6 @@ void ompl::geometric::MAB_SSRRT_DEBUG::clear()
         nn_->clear();
     lastGoalMotion_ = nullptr;
     currentIteration_ = 0;
-    currentBurninStep_ = -1;
     cylinderValidStreak_ = 0;
     
     // DEBUG: Clear debug tracking
@@ -443,22 +458,14 @@ double ompl::geometric::MAB_SSRRT_DEBUG::computeValidityRate()
     auto& sphereHypothesis = *samplingArms_[0];
     auto& sphere = sphereHypothesis.sphere;
 
-    // Test each sphere sample for validity
-    // Check both: (1) sample state is valid, (2) motion from origin to sample is valid
-    // This ensures we find samples that are both in free space AND reachable from start
+    // Test each sphere sample for motion validity
     for (size_t i = 0; i < sphere->getSpherePoints().size(); i++)
     {
         auto sample = sphere->getSample();
         copySampleVectorIntoState(sample_state, sphereHypothesis,
                                   {sample.second.x, sample.second.y, sample.second.z});
-        si_->getStateSpace()->enforceBounds(sample_state);
 
-        // Check if sample state itself is valid (in free space)
-        bool sampleStateValid = si_->isValid(sample_state);
-        // Also check if motion from origin to sample is valid (reachable)
-        bool motionValid = si_->checkMotion(origin_state, sample_state);
-        // Sample is valid only if both conditions are met
-        bool validFlag = sampleStateValid && motionValid;
+        bool validFlag = si_->checkMotion(origin_state, sample_state);
         
         // DEBUG: Track sample (these are from AdaptiveSphereSampler during burn-in)
         trackSample(sample_state, validFlag, "burnin", "sphere", 0.0, sample.second.sampledAtRadius);
@@ -548,71 +555,117 @@ bool ompl::geometric::MAB_SSRRT_DEBUG::performInitialUniformCheck()
 }
 
 /**
- * Iteratively adjusts sampling radius to find optimal sphere size.
+ * Uses bisection search to find optimal sampling radius.
  * 
  * Algorithm:
- * 1. Sample at current radius
- * 2. Compute validity rate
- * 3. If too low: shrink radius, keep valid samples
- * 4. If too high: grow radius, discard samples
- * 5. Repeat until in target range or max steps reached
+ * 1. Start with lower_bound and upper_bound
+ * 2. While (upper - lower > tolerance) and (iterations < max):
+ *    - mid = (lower + upper) / 2
+ *    - Sample at mid radius and compute validity rate
+ *    - If validity < min_threshold: need smaller radius → upper = mid
+ *    - If validity > max_threshold: need larger radius → lower = mid
+ *    - If validity in target range: accept mid, break
+ * 3. Return the best radius found
  */
 void ompl::geometric::MAB_SSRRT_DEBUG::performAdaptiveBurnin()
 {
-    OMPL_INFORM("DEBUG: Starting adaptive burn-in phase");
+    OMPL_INFORM("DEBUG: Starting adaptive burn-in phase (bisection search)");
     
     auto& sphere = samplingArms_.at(0)->sphere;
     sphere->setPCAFilterTopPercent(pcaFilterTopPercent_);
     
     selectedSamplerArm_ = SamplerArm::UNIFORM;
-    double current_radius = adaptiveStartRadius_;
+    
+    double lower = adaptiveBisectionLowerRadius_;
+    double upper = adaptiveBisectionUpperRadius_;
+    double best_radius = lower;  // Track best radius found
+    double best_validity = 0.0;
     
     int current_step = 0;
-    currentBurninStep_ = 0;  // Start burn-in step tracking
     int consecutive_full_validity_count = 0;
     
-    OMPL_INFORM("DEBUG: Initial radius = %.10f, min radius = %.10f", current_radius, adaptiveMinRadius_);
-    OMPL_INFORM("DEBUG: adaptiveStartRadius_ member variable = %.10f", adaptiveStartRadius_);
+    OMPL_INFORM("DEBUG: Bisection bounds: lower=%.10f, upper=%.10f, tolerance=%.10f", 
+                lower, upper, adaptiveBisectionTolerance_);
     
-    while (current_radius > adaptiveMinRadius_)
+    // Validate bounds
+    if (lower >= upper)
     {
-        currentBurninStep_ = current_step;  // Update current burn-in step
-        OMPL_INFORM("DEBUG: Burn-in step %d: radius = %.10f", current_step, current_radius);
+        OMPL_ERROR("DEBUG: Invalid bisection bounds: lower (%.10f) >= upper (%.10f)", lower, upper);
+        finalizeBurnin(sphere, lower);
+        return;
+    }
+    
+    while ((upper - lower) > adaptiveBisectionTolerance_ && current_step < adaptiveBurninMaxSteps_)
+    {
+        double mid = (lower + upper) / 2.0;
+        currentBurninStep_ = current_step;
         
-        // Generate samples at current radius
+        OMPL_INFORM("DEBUG: Burn-in step %d: testing radius = %.10f (range: [%.10f, %.10f])", 
+                   current_step, mid, lower, upper);
+        
+        // Generate samples at mid radius
         OMPL_INFORM("DEBUG: Collecting %d quasi-random samples at radius %.10f", 
-                   adaptiveQuasirandomSampleSize_, current_radius);
-        sphere->collectQuasiRandomSamples(current_radius);
+                   adaptiveQuasirandomSampleSize_, mid);
+        sphere->collectQuasiRandomSamples(mid);
         double validity_rate = computeValidityRate();
         
-        OMPL_INFORM("DEBUG: Burn-in step %d: validity rate = %.4f", current_step, validity_rate);
+        OMPL_INFORM("DEBUG: Burn-in step %d: radius=%.10f, validity_rate=%.4f", 
+                   current_step, mid, validity_rate);
+        
+        // Track best radius (closest to target range)
+        if (isValidityRateInTargetRange(validity_rate))
+        {
+            best_radius = mid;
+            best_validity = validity_rate;
+            OMPL_INFORM("DEBUG: Found radius in target range! radius=%.10f, validity=%.4f", 
+                       mid, validity_rate);
+            sphere->appendCachedValidSamples();
+            break;
+        }
+        else if (std::abs(validity_rate - (adaptiveMinExpectedValidityRate_ + adaptiveMaxExpectedValidityRate_) / 2.0) < 
+                 std::abs(best_validity - (adaptiveMinExpectedValidityRate_ + adaptiveMaxExpectedValidityRate_) / 2.0))
+        {
+            best_radius = mid;
+            best_validity = validity_rate;
+        }
         
         // Check for early exit conditions
         if (shouldExitEarlyOnFullValidity(validity_rate, consecutive_full_validity_count, sphere))
         {
             OMPL_INFORM("DEBUG: Early exit triggered (full validity)");
+            best_radius = mid;
             break;
         }
-
-        if (isValidityRateInTargetRange(validity_rate) || current_step >= adaptiveBurninMaxSteps_)
+        
+        // Bisection: adjust bounds based on validity
+        if (validity_rate < adaptiveMinExpectedValidityRate_)
         {
-            OMPL_INFORM("DEBUG: Target validity range reached or max steps exceeded");
-            sphere->appendCachedValidSamples();
-            break;
+            // Validity too low → need smaller radius
+            upper = mid;
+            OMPL_INFORM("DEBUG: Validity too low (%.4f < %.4f), reducing upper bound to %.10f", 
+                       validity_rate, adaptiveMinExpectedValidityRate_, upper);
+            sphere->appendCachedValidSamples();  // Keep valid samples
         }
-
-        // Adjust radius based on validity feedback
-        double old_radius = current_radius;
-        current_radius = adjustRadiusBasedOnValidity(sphere, current_radius, validity_rate);
-        OMPL_INFORM("DEBUG: Radius adjusted: %.10f -> %.10f (change: %.2f%%)", 
-                    old_radius, current_radius, 
-                    old_radius > 0 ? 100.0 * (current_radius - old_radius) / old_radius : 0.0);
+        else if (validity_rate > adaptiveMaxExpectedValidityRate_)
+        {
+            // Validity too high → need larger radius
+            lower = mid;
+            OMPL_INFORM("DEBUG: Validity too high (%.4f > %.4f), increasing lower bound to %.10f", 
+                       validity_rate, adaptiveMaxExpectedValidityRate_, lower);
+            sphere->clearCachedValidSamples();  // Discard samples (radius was too small)
+        }
+        
         current_step++;
     }
     
-    OMPL_INFORM("DEBUG: Burn-in complete. Final radius = %.10f", current_radius);
-    currentBurninStep_ = -1;  // End burn-in step tracking
-    finalizeBurnin(sphere, current_radius);
+    if (current_step >= adaptiveBurninMaxSteps_)
+    {
+        OMPL_INFORM("DEBUG: Max steps reached, using best radius found");
+    }
+    
+    OMPL_INFORM("DEBUG: Burn-in complete. Final radius = %.10f (validity=%.4f, steps=%d)", 
+               best_radius, best_validity, current_step);
+    finalizeBurnin(sphere, best_radius);
 }
 
 bool ompl::geometric::MAB_SSRRT_DEBUG::shouldExitEarlyOnFullValidity(
@@ -654,31 +707,17 @@ double ompl::geometric::MAB_SSRRT_DEBUG::adjustRadiusBasedOnValidity(
     double current_radius,
     double validity_rate)
 {
-    OMPL_INFORM("DEBUG: adjustRadiusBasedOnValidity: validity_rate=%.6f, min=%.6f, max=%.6f, current_radius=%.10f", 
-                validity_rate, adaptiveMinExpectedValidityRate_, adaptiveMaxExpectedValidityRate_, current_radius);
-    
     if (validity_rate < adaptiveMinExpectedValidityRate_)
     {
         // Validity too low → shrink radius (keep valid samples)
-        double old_radius = current_radius;
         current_radius *= std::exp(-adaptiveShrinkStep_);
-        OMPL_INFORM("DEBUG: Shrinking radius: %.10f -> %.10f (exp(-%.6f) = %.6f)", 
-                    old_radius, current_radius, adaptiveShrinkStep_, std::exp(-adaptiveShrinkStep_));
         sphere->appendCachedValidSamples();
     }
     else if (validity_rate > adaptiveMaxExpectedValidityRate_)
     {
         // Validity too high → grow radius (discard samples)
-        double old_radius = current_radius;
-        double grow_factor = std::exp(adaptiveGrowStep_);
-        current_radius *= grow_factor;
-        OMPL_INFORM("DEBUG: Growing radius: %.10f -> %.10f (exp(%.6f) = %.6f, grow_step=%.6f)", 
-                    old_radius, current_radius, adaptiveGrowStep_, grow_factor, adaptiveGrowStep_);
+        current_radius *= std::exp(adaptiveGrowStep_);
         sphere->clearCachedValidSamples();
-    }
-    else
-    {
-        OMPL_INFORM("DEBUG: Validity rate in target range, no radius adjustment");
     }
 
     return current_radius;
@@ -1552,12 +1591,12 @@ ompl::base::PlannerStatus ompl::geometric::MAB_SSRRT_DEBUG::solve(
         // DEBUG: Export path with sampler information
         if (debugEnabled_) {
             // Build base class path for export
-            std::vector<MAB_SSRRT::Motion*> baseMpath;
+            std::vector<MAB_RRT::Motion*> baseMpath;
             for (Motion* m : mpath) {
                 // Access the base class Motion through inheritance
                 // Since Motion in DEBUG inherits from base Motion, we can use reinterpret_cast
                 // or better: access the state and rebuild the path from PlannerData
-                baseMpath.push_back(reinterpret_cast<MAB_SSRRT::Motion*>(m));
+                baseMpath.push_back(reinterpret_cast<MAB_RRT::Motion*>(m));
             }
             exportPathWithSamplers("bugtrap_path.csv", baseMpath);
         }
@@ -1661,7 +1700,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
         sample.iteration = currentIteration_;
         sample.reward = reward;
         sample.radius = radius;
-        sample.burninStep = (phase == "burnin") ? currentBurninStep_ : -1;
+        sample.burnin_step = (phase == "burnin") ? currentBurninStep_ : -1;
         sample.wasConnected = wasConnected;
         
         // Extract nearest neighbor coordinates if provided
@@ -1694,7 +1733,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
         
         // Debug output for burn-in samples (first few only to avoid spam)
         if (phase == "burnin" && debugSamples_.size() <= 5) {
-            OMPL_INFORM("DEBUG: Tracked burn-in sample #%zu: sampler=%s, valid=%d, radius=%.10f", 
+            OMPL_INFORM("DEBUG: Tracked burn-in sample #%zu: sampler=%s, valid=%d, radius=%.4f", 
                        debugSamples_.size(), sampler.c_str(), isValid ? 1 : 0, radius);
         }
     } catch (...) {
@@ -1703,7 +1742,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::trackSample(
 }
 
 void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
-    const std::string& filename, const std::vector<MAB_SSRRT::Motion*>& mpath) const
+    const std::string& filename, const std::vector<MAB_RRT::Motion*>& mpath) const
 {
     // Always save to demos/disassembly/ directory (absolute path from config)
     std::string pathFile = outputDirectory_ + filename;
@@ -1720,7 +1759,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
         // Write path in reverse order (from start to goal)
         for (int i = static_cast<int>(mpath.size()) - 1; i >= 0; --i)
         {
-            MAB_SSRRT::Motion* motion = mpath[i];
+            MAB_RRT::Motion* motion = mpath[i];
             const auto* realState = motion->state->as<base::RealVectorStateSpace::StateType>();
             if (realState == nullptr) continue;
             
@@ -1736,57 +1775,16 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportPathWithSamplers(
                 continue;
             }
             
-            // Determine sampler by looking up in debug samples
-            // This gives us the exact sampler (uniform, cylinder_up, cylinder_down) used
+            // Determine sampler from MotionOrigin
             std::string sampler = "unknown";
-            
-            // First try to find match in debug samples (check all samples, not just connected ones)
-            // Use reverse iteration to get the most recent match
-            bool found = false;
-            double bestDist = 1e10;
-            for (auto it = debugSamples_.rbegin(); it != debugSamples_.rend(); ++it) {
-                if (it->phase == "planning") {
-                    double dx = std::abs(it->x - x);
-                    double dy = std::abs(it->y - y);
-                    double dist = std::sqrt(dx*dx + dy*dy);
-                    // Use larger tolerance to account for distance limiting and state interpolation
-                    // Take the closest match within tolerance
-                    if (dist < 2.0 && dist < bestDist) {
-                        sampler = it->sampler;
-                        bestDist = dist;
-                        found = true;
-                    }
-                }
-            }
-            
-            // If still not found, try to match with any sample (including burn-in)
-            if (!found) {
-                for (auto it = debugSamples_.rbegin(); it != debugSamples_.rend(); ++it) {
-                    double dx = std::abs(it->x - x);
-                    double dy = std::abs(it->y - y);
-                    double dist = std::sqrt(dx*dx + dy*dy);
-                    if (dist < 2.0 && dist < bestDist) {
-                        sampler = it->sampler;
-                        bestDist = dist;
-                        found = true;
-                    }
-                }
-            }
-            
-            // If still not found, fall back to MotionOrigin (but this loses UP/DOWN distinction)
-            if (!found) {
-                auto origin = motion->bornFrom;
-                if (origin == MAB_SSRRT::MotionOrigin::UNIFORM) {
-                    sampler = "uniform";
-                } else if (origin == MAB_SSRRT::MotionOrigin::CYLINDER) {
-                    // Can't determine UP/DOWN from MotionOrigin, default to cylinder
-                    sampler = "cylinder";
-                }
-            }
-            
-            // Special case: first state is always "start"
-            if (i == static_cast<int>(mpath.size()) - 1) {
-                sampler = "start";
+            // Access bornFrom which is of type MAB_RRT::MotionOrigin
+            auto origin = motion->bornFrom;
+            if (origin == MAB_RRT::MotionOrigin::UNIFORM) {
+                sampler = "uniform";
+            } else if (origin == MAB_RRT::MotionOrigin::CYLINDER) {
+                // Default to cylinder_up - we can't determine UP/DOWN from MotionOrigin alone
+                // but this is better than nothing
+                sampler = "cylinder_up";
             }
             
             outFile << x << "," << y << "," << sampler << "\n";
@@ -1818,7 +1816,7 @@ void ompl::geometric::MAB_SSRRT_DEBUG::exportSampleData(const std::string& filen
                 << sample.iteration << ","
                 << sample.reward << ","
                 << sample.radius << ","
-                << sample.burninStep << ","
+                << sample.burnin_step << ","
                 << (sample.wasConnected ? "1" : "0") << ","
                 << sample.nearest_x << ","
                 << sample.nearest_y << "\n";

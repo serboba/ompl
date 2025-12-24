@@ -20,13 +20,18 @@ forced_uniform_after_cylinder_valid_streak: 5
 
 # Adaptive Sphere Sampling Parameters
 adaptive_quasirandom_sample_size : 16
+# Bisection search parameters (replaces grow/shrink approach)
+adaptive_bisection_lower_radius : 0.00001
+adaptive_bisection_upper_radius : 10.0
+adaptive_bisection_tolerance : 0.0001  # Convergence tolerance for bisection
+adaptive_min_expected_validity_rate : 0.30
+adaptive_max_expected_validity_rate: 0.50
+adaptive_burnin_max_steps: 50  # Max iterations for bisection search
+# Legacy parameters (kept for compatibility, not used with bisection)
 adaptive_start_radius : 0.1
 adaptive_min_radius : 0.00001
 adaptive_shrink_step : 0.05
 adaptive_grow_step : 0.9
-adaptive_min_expected_validity_rate : 0.30
-adaptive_max_expected_validity_rate: 0.50
-adaptive_burnin_max_steps: 50
 
 pca_filter_top_percent: 1.0  # Percentage of top PCA components to keep, default 1.0 to use all valid samples for online PCA recalibration
 

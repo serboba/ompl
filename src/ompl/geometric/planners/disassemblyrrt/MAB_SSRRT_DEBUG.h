@@ -416,13 +416,18 @@ namespace ompl {
             
             // Adaptive sampling parameters
             int adaptiveQuasirandomSampleSize_{128};
+            // Bisection search parameters
+            double adaptiveBisectionLowerRadius_{0.00001};
+            double adaptiveBisectionUpperRadius_{1.0};
+            double adaptiveBisectionTolerance_{0.0001};
+            double adaptiveMinExpectedValidityRate_{0.3};
+            double adaptiveMaxExpectedValidityRate_{0.7};
+            int adaptiveBurninMaxSteps_{20};
+            // Legacy parameters (kept for compatibility)
             double adaptiveStartRadius_{0.5};
             double adaptiveMinRadius_{0.01};
             double adaptiveShrinkStep_{0.1};
             double adaptiveGrowStep_{0.1};
-            double adaptiveMinExpectedValidityRate_{0.3};
-            double adaptiveMaxExpectedValidityRate_{0.7};
-            int adaptiveBurninMaxSteps_{10};
 
             // Initial uniform check
             double initialFreeSamplingProbability_{0.5};
@@ -466,6 +471,7 @@ namespace ompl {
             int cylinderValidStreak_{0};
             SamplerArm selectedSamplerArm_{SamplerArm::UNIFORM};
             std::shared_ptr<base::RealVectorStateSampler> uniformRealVecSampler_;
+            int currentBurninStep_{0};  // Current burn-in step for tracking
             
             // ====================================================================
             // DEBUG TRACKING
@@ -480,7 +486,7 @@ namespace ompl {
                 int iteration;
                 double reward;
                 double radius;  // For sphere samples
-                int burninStep;  // Burn-in step number (-1 for planning phase)
+                int burnin_step;  // Burn-in step number (for visualization)
                 // Connection/edge information
                 bool wasConnected;  // Whether this sample was connected to the tree
                 double nearest_x, nearest_y;  // Coordinates of nearest neighbor (if connected)
