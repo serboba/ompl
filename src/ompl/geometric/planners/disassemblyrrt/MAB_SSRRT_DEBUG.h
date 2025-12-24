@@ -471,7 +471,6 @@ namespace ompl {
             int cylinderValidStreak_{0};
             SamplerArm selectedSamplerArm_{SamplerArm::UNIFORM};
             std::shared_ptr<base::RealVectorStateSampler> uniformRealVecSampler_;
-            int currentBurninStep_{0};  // Current burn-in step for tracking
             
             // ====================================================================
             // DEBUG TRACKING

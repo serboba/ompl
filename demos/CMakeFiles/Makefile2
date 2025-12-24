@@ -93,6 +93,7 @@ clean: doc/clean
 demos/all: demos/CMakeFiles/demo_Vamp.dir/all
 demos/all: demos/CMakeFiles/demo_MultiLevelPlanarManipulator.dir/all
 demos/all: demos/CMakeFiles/demo_benchmark_occupancy_grid.dir/all
+demos/all: demos/CMakeFiles/demo_MAB_RRT.dir/all
 demos/all: demos/CMakeFiles/demo_SpaceTimePlanning.dir/all
 demos/all: demos/CMakeFiles/demo_MultiLevelPlanningRigidBody3D.dir/all
 demos/all: demos/CMakeFiles/demo_DubinsAirplane.dir/all
@@ -118,7 +119,6 @@ demos/all: demos/CMakeFiles/demo_MultiLevelPlanningRigidBody2D.dir/all
 demos/all: demos/CMakeFiles/demo_KinematicChainBenchmark.dir/all
 demos/all: demos/CMakeFiles/demo_SSTPinballPlanning.dir/all
 demos/all: demos/CMakeFiles/demo_HypercubeBenchmark.dir/all
-demos/all: demos/CMakeFiles/demo_MAB_SSRRT.dir/all
 demos/all: demos/CMakeFiles/demo_MultiLevelPlanningHyperCubeBenchmark.dir/all
 demos/all: demos/CMakeFiles/demo_PlannerData.dir/all
 demos/all: demos/CMakeFiles/demo_OptimalPlanning.dir/all
@@ -143,6 +143,7 @@ demos/preinstall:
 demos/clean: demos/CMakeFiles/demo_Vamp.dir/clean
 demos/clean: demos/CMakeFiles/demo_MultiLevelPlanarManipulator.dir/clean
 demos/clean: demos/CMakeFiles/demo_benchmark_occupancy_grid.dir/clean
+demos/clean: demos/CMakeFiles/demo_MAB_RRT.dir/clean
 demos/clean: demos/CMakeFiles/demo_SpaceTimePlanning.dir/clean
 demos/clean: demos/CMakeFiles/demo_MultiLevelPlanningRigidBody3D.dir/clean
 demos/clean: demos/CMakeFiles/demo_DubinsAirplane.dir/clean
@@ -168,7 +169,6 @@ demos/clean: demos/CMakeFiles/demo_MultiLevelPlanningRigidBody2D.dir/clean
 demos/clean: demos/CMakeFiles/demo_KinematicChainBenchmark.dir/clean
 demos/clean: demos/CMakeFiles/demo_SSTPinballPlanning.dir/clean
 demos/clean: demos/CMakeFiles/demo_HypercubeBenchmark.dir/clean
-demos/clean: demos/CMakeFiles/demo_MAB_SSRRT.dir/clean
 demos/clean: demos/CMakeFiles/demo_MultiLevelPlanningHyperCubeBenchmark.dir/clean
 demos/clean: demos/CMakeFiles/demo_PlannerData.dir/clean
 demos/clean: demos/CMakeFiles/demo_OptimalPlanning.dir/clean
@@ -1277,6 +1277,33 @@ demos/CMakeFiles/demo_benchmark_occupancy_grid.dir/clean:
 .PHONY : demos/CMakeFiles/demo_benchmark_occupancy_grid.dir/clean
 
 #=============================================================================
+# Target rules for target demos/CMakeFiles/demo_MAB_RRT.dir
+
+# All Build rule for target.
+demos/CMakeFiles/demo_MAB_RRT.dir/all: src/ompl/CMakeFiles/ompl.dir/all
+	$(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/depend
+	$(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles --progress-num=9 "Built target demo_MAB_RRT"
+.PHONY : demos/CMakeFiles/demo_MAB_RRT.dir/all
+
+# Build rule for subdir invocation for target.
+demos/CMakeFiles/demo_MAB_RRT.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles 65
+	$(MAKE) -f CMakeFiles/Makefile2 demos/CMakeFiles/demo_MAB_RRT.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles 0
+.PHONY : demos/CMakeFiles/demo_MAB_RRT.dir/rule
+
+# Convenience name for target.
+demo_MAB_RRT: demos/CMakeFiles/demo_MAB_RRT.dir/rule
+
+.PHONY : demo_MAB_RRT
+
+# clean rule for target.
+demos/CMakeFiles/demo_MAB_RRT.dir/clean:
+	$(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/clean
+.PHONY : demos/CMakeFiles/demo_MAB_RRT.dir/clean
+
+#=============================================================================
 # Target rules for target demos/CMakeFiles/demo_SpaceTimePlanning.dir
 
 # All Build rule for target.
@@ -1950,33 +1977,6 @@ demo_HypercubeBenchmark: demos/CMakeFiles/demo_HypercubeBenchmark.dir/rule
 demos/CMakeFiles/demo_HypercubeBenchmark.dir/clean:
 	$(MAKE) -f demos/CMakeFiles/demo_HypercubeBenchmark.dir/build.make demos/CMakeFiles/demo_HypercubeBenchmark.dir/clean
 .PHONY : demos/CMakeFiles/demo_HypercubeBenchmark.dir/clean
-
-#=============================================================================
-# Target rules for target demos/CMakeFiles/demo_MAB_SSRRT.dir
-
-# All Build rule for target.
-demos/CMakeFiles/demo_MAB_SSRRT.dir/all: src/ompl/CMakeFiles/ompl.dir/all
-	$(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/depend
-	$(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles --progress-num=9 "Built target demo_MAB_SSRRT"
-.PHONY : demos/CMakeFiles/demo_MAB_SSRRT.dir/all
-
-# Build rule for subdir invocation for target.
-demos/CMakeFiles/demo_MAB_SSRRT.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles 65
-	$(MAKE) -f CMakeFiles/Makefile2 demos/CMakeFiles/demo_MAB_SSRRT.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/serboba/transferompl_ws/src/ompl_iso/demos/CMakeFiles 0
-.PHONY : demos/CMakeFiles/demo_MAB_SSRRT.dir/rule
-
-# Convenience name for target.
-demo_MAB_SSRRT: demos/CMakeFiles/demo_MAB_SSRRT.dir/rule
-
-.PHONY : demo_MAB_SSRRT
-
-# clean rule for target.
-demos/CMakeFiles/demo_MAB_SSRRT.dir/clean:
-	$(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/clean
-.PHONY : demos/CMakeFiles/demo_MAB_SSRRT.dir/clean
 
 #=============================================================================
 # Target rules for target demos/CMakeFiles/demo_MultiLevelPlanningHyperCubeBenchmark.dir

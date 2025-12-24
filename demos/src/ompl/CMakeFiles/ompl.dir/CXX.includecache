@@ -594,24 +594,6 @@ iostream
 sstream
 -
 
-/home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/MAB_SSRRT.cpp
-ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h
-/home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h
-limits
--
-filesystem
--
-ompl/base/spaces/SE3StateSpace.h
--
-ompl/base/goals/GoalSampleableRegion.h
-/home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/ompl/base/goals/GoalSampleableRegion.h
-ompl/tools/config/SelfConfig.h
-/home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/ompl/tools/config/SelfConfig.h
-ompl/base/spaces/RealVectorStateSpace.h
--
-yaml-cpp/yaml.h
--
-
 /home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/MAB_SSRRT_DEBUG.cpp
 ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h
 /home/serboba/transferompl_ws/src/ompl_iso/src/ompl/geometric/planners/disassemblyrrt/src/ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h

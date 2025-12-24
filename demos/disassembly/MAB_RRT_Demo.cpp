@@ -32,14 +32,14 @@
 * POSSIBILITY OF SUCH DAMAGE.
 *********************************************************************/
 
-/* Author: Servet Bora Bayraktar - MAB-SSRRT Standalone Demo */
+/* Author: Servet Bora Bayraktar - MAB-RRT Standalone Demo */
 
 /**
- * @file MAB_SSRRT_Demo.cpp
- * @brief Standalone demo for MAB-SSRRT planner
+ * @file MAB_RRT_Demo.cpp
+ * @brief Standalone demo for MAB-RRT planner
  * 
- * This demo tests the MAB-SSRRT planner in an isolated OMPL environment:
- * - MAB-SSRRT: Multi-Armed Bandit Sphere-Sampled RRT planner
+ * This demo tests the MAB-RRT planner in an isolated OMPL environment:
+ * - MAB-RRT: Multi-Armed Bandit RRT planner
  * 
  * Supports:
  * - 6D: Constrained Assembly (RPY + XYZ)
@@ -64,7 +64,7 @@
 #include <ompl/geometric/SimpleSetup.h>
 #include <ompl/geometric/PathGeometric.h>
  
-// MAB-SSRRT planner
+// MAB-RRT planner
 #include <ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h>
 #include <ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h>
  
@@ -448,12 +448,12 @@ private:
 };
 
 /**
- * @brief Runs the MAB-SSRRT (6D Assembly) demo
+ * @brief Runs the MAB-RRT (6D Assembly) demo
  */
-void runMAB_SSRRT_Demo(const std::string& configPath, double timeout = 10.0)
+void runMAB_RRT_Demo(const std::string& configPath, double timeout = 10.0)
 {
     std::cout << "\n==================================================" << std::endl;
-    std::cout << "    MAB-SSRRT (6D Assembly) Demo" << std::endl;
+    std::cout << "    MAB-RRT (6D Assembly) Demo" << std::endl;
     std::cout << "==================================================" << std::endl;
 
     auto space = std::make_shared<ob::RealVectorStateSpace>(6);
@@ -482,7 +482,7 @@ void runMAB_SSRRT_Demo(const std::string& configPath, double timeout = 10.0)
 
     pdef->setStartAndGoalStates(start, goal, 0.1);
 
-    std::cout << "\n[INFO] Creating MAB-SSRRT planner..." << std::endl;
+    std::cout << "\n[INFO] Creating MAB-RRT planner..." << std::endl;
     auto planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
     planner->setProblemDefinition(pdef);
     planner->setup();
@@ -502,7 +502,7 @@ void runMAB_SSRRT_Demo(const std::string& configPath, double timeout = 10.0)
 }
 
 /**
- * @brief Runs the MAB-SSRRT planner demo in a 2D Bug Trap
+ * @brief Runs the MAB-RRT planner demo in a 2D Bug Trap
  * 
  * Scenario:
  * - Start is at (0,0) inside a U-shaped obstacle.
@@ -513,7 +513,7 @@ void runMAB_SSRRT_Demo(const std::string& configPath, double timeout = 10.0)
 void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool debug = false)
 {
     std::cout << "\n==================================================" << std::endl;
-    std::cout << "    MAB-SSRRT 2D Bug Trap Demo" << std::endl;
+    std::cout << "    MAB-RRT 2D Bug Trap Demo" << std::endl;
     std::cout << "==================================================" << std::endl;
     std::cout << "[INFO] Algorithm: Multi-Armed Bandit Sphere-Sampled RRT" << std::endl;
     std::cout << "[INFO] Scenario: Bug Trap (Escape Local Minima)" << std::endl;
@@ -548,7 +548,7 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
 
     pdef->setStartAndGoalStates(start, goal, 0.2);
 
-    std::cout << "\n[INFO] Creating MAB-SSRRT planner for Bug Trap..." << std::endl;
+    std::cout << "\n[INFO] Creating MAB-RRT planner for Bug Trap..." << std::endl;
     if (debug) {
         std::cout << "[INFO] DEBUG MODE ENABLED" << std::endl;
     }
@@ -559,7 +559,7 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
     
     if (debug) {
         debugPlanner = std::make_shared<og::MAB_SSRRT_DEBUG>(si, configPath);
-        planner = debugPlanner;  // MAB_SSRRT_DEBUG inherits from MAB_SSRRT
+        planner = debugPlanner;  // MAB_SSRRT_DEBUG inherits from MAB_SSRRT (note: class names not yet renamed)
     } else {
         planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
     }
@@ -660,7 +660,7 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
 }
 
 /**
- * @brief Runs the MAB-SSRRT planner demo with occupancy grid
+ * @brief Runs the MAB-RRT planner demo with occupancy grid
  * 
  * Loads occupancy grid from CSV file and uses it for collision checking.
  * Grid format:
@@ -674,7 +674,7 @@ void runOccupancyGridDemo(const std::string& configPath,
                           bool debug = false)
 {
     std::cout << "\n==================================================" << std::endl;
-    std::cout << "    MAB-SSRRT 2D Occupancy Grid Demo" << std::endl;
+    std::cout << "    MAB-RRT 2D Occupancy Grid Demo" << std::endl;
     std::cout << "==================================================" << std::endl;
     std::cout << "[INFO] Algorithm: Multi-Armed Bandit Sphere-Sampled RRT" << std::endl;
     std::cout << "[INFO] Scenario: 2D Occupancy Grid" << std::endl;
@@ -742,7 +742,7 @@ void runOccupancyGridDemo(const std::string& configPath,
 
     pdef->setStartAndGoalStates(start, goal, 0.5);
 
-    std::cout << "\n[INFO] Creating MAB-SSRRT planner for Occupancy Grid..." << std::endl;
+    std::cout << "\n[INFO] Creating MAB-RRT planner for Occupancy Grid..." << std::endl;
     if (debug) {
         std::cout << "[INFO] DEBUG MODE ENABLED" << std::endl;
     }
@@ -837,7 +837,7 @@ void runOccupancyGridDemo(const std::string& configPath,
 
 void printUsage(const char* programName)
 {
-    std::cout << "\nMAB-SSRRT Planner Demo" << std::endl;
+    std::cout << "\nMAB-RRT Planner Demo" << std::endl;
     std::cout << "======================\n" << std::endl;
     std::cout << "Usage: " << programName << " [options]" << std::endl;
     std::cout << "\nOptions:" << std::endl;
@@ -923,7 +923,7 @@ int main(int argc, char** argv)
         }
         else
         {
-            runMAB_SSRRT_Demo(configPath, timeout);
+            runMAB_RRT_Demo(configPath, timeout);
         }
     }
     catch (const std::exception& e)

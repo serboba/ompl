@@ -1,25 +1,30 @@
-# Exclude debug and experimental files from MAB-RRT branch
-# Generated data files
-*.csv
-*.pdf
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Output files (organized in outputs/ directory)
+outputs/
 *.png
+*.pdf
+*.csv
 
-# Debug planner files
-*_DEBUG*
+# But keep example/test files
+!test_tiny_circle.png
 
-# Visualization and plotting scripts
-visualize_*.py
-plot_*.py
+# Build artifacts
+*.o
+*.so
+*.a
 
-# Benchmarking scripts
-benchmark_occupancy_grid.cpp
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Generated directories
-grids/
-plots/
-scripts/
-
-# Visualization documentation (optional)
-VISUALIZATION_GENERATED.md
-VISUALIZATION_GUIDE.md
-VISUALIZATION_PROMPTS.md
+# OS files
+.DS_Store
+Thumbs.db

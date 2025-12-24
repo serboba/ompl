@@ -235,6 +235,21 @@ demo_benchmark_occupancy_grid/fast:
 .PHONY : demo_benchmark_occupancy_grid/fast
 
 # Convenience name for target.
+demos/CMakeFiles/demo_MAB_RRT.dir/rule:
+	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f CMakeFiles/Makefile2 demos/CMakeFiles/demo_MAB_RRT.dir/rule
+.PHONY : demos/CMakeFiles/demo_MAB_RRT.dir/rule
+
+# Convenience name for target.
+demo_MAB_RRT: demos/CMakeFiles/demo_MAB_RRT.dir/rule
+
+.PHONY : demo_MAB_RRT
+
+# fast build rule for target.
+demo_MAB_RRT/fast:
+	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/build
+.PHONY : demo_MAB_RRT/fast
+
+# Convenience name for target.
 demos/CMakeFiles/demo_SpaceTimePlanning.dir/rule:
 	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f CMakeFiles/Makefile2 demos/CMakeFiles/demo_SpaceTimePlanning.dir/rule
 .PHONY : demos/CMakeFiles/demo_SpaceTimePlanning.dir/rule
@@ -608,21 +623,6 @@ demo_HypercubeBenchmark: demos/CMakeFiles/demo_HypercubeBenchmark.dir/rule
 demo_HypercubeBenchmark/fast:
 	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_HypercubeBenchmark.dir/build.make demos/CMakeFiles/demo_HypercubeBenchmark.dir/build
 .PHONY : demo_HypercubeBenchmark/fast
-
-# Convenience name for target.
-demos/CMakeFiles/demo_MAB_SSRRT.dir/rule:
-	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f CMakeFiles/Makefile2 demos/CMakeFiles/demo_MAB_SSRRT.dir/rule
-.PHONY : demos/CMakeFiles/demo_MAB_SSRRT.dir/rule
-
-# Convenience name for target.
-demo_MAB_SSRRT: demos/CMakeFiles/demo_MAB_SSRRT.dir/rule
-
-.PHONY : demo_MAB_SSRRT
-
-# fast build rule for target.
-demo_MAB_SSRRT/fast:
-	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/build
-.PHONY : demo_MAB_SSRRT/fast
 
 # Convenience name for target.
 demos/CMakeFiles/demo_MultiLevelPlanningHyperCubeBenchmark.dir/rule:
@@ -1917,32 +1917,32 @@ constraint/ConstrainedPlanningTorus.cpp.s:
 	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_ConstrainedPlanningTorus.dir/build.make demos/CMakeFiles/demo_ConstrainedPlanningTorus.dir/constraint/ConstrainedPlanningTorus.cpp.s
 .PHONY : constraint/ConstrainedPlanningTorus.cpp.s
 
-disassembly/MAB_SSRRT_Demo.o: disassembly/MAB_SSRRT_Demo.cpp.o
+disassembly/MAB_RRT_Demo.o: disassembly/MAB_RRT_Demo.cpp.o
 
-.PHONY : disassembly/MAB_SSRRT_Demo.o
+.PHONY : disassembly/MAB_RRT_Demo.o
 
 # target to build an object file
-disassembly/MAB_SSRRT_Demo.cpp.o:
-	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/disassembly/MAB_SSRRT_Demo.cpp.o
-.PHONY : disassembly/MAB_SSRRT_Demo.cpp.o
+disassembly/MAB_RRT_Demo.cpp.o:
+	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/disassembly/MAB_RRT_Demo.cpp.o
+.PHONY : disassembly/MAB_RRT_Demo.cpp.o
 
-disassembly/MAB_SSRRT_Demo.i: disassembly/MAB_SSRRT_Demo.cpp.i
+disassembly/MAB_RRT_Demo.i: disassembly/MAB_RRT_Demo.cpp.i
 
-.PHONY : disassembly/MAB_SSRRT_Demo.i
+.PHONY : disassembly/MAB_RRT_Demo.i
 
 # target to preprocess a source file
-disassembly/MAB_SSRRT_Demo.cpp.i:
-	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/disassembly/MAB_SSRRT_Demo.cpp.i
-.PHONY : disassembly/MAB_SSRRT_Demo.cpp.i
+disassembly/MAB_RRT_Demo.cpp.i:
+	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/disassembly/MAB_RRT_Demo.cpp.i
+.PHONY : disassembly/MAB_RRT_Demo.cpp.i
 
-disassembly/MAB_SSRRT_Demo.s: disassembly/MAB_SSRRT_Demo.cpp.s
+disassembly/MAB_RRT_Demo.s: disassembly/MAB_RRT_Demo.cpp.s
 
-.PHONY : disassembly/MAB_SSRRT_Demo.s
+.PHONY : disassembly/MAB_RRT_Demo.s
 
 # target to generate assembly for a file
-disassembly/MAB_SSRRT_Demo.cpp.s:
-	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_SSRRT.dir/build.make demos/CMakeFiles/demo_MAB_SSRRT.dir/disassembly/MAB_SSRRT_Demo.cpp.s
-.PHONY : disassembly/MAB_SSRRT_Demo.cpp.s
+disassembly/MAB_RRT_Demo.cpp.s:
+	cd /home/serboba/transferompl_ws/src/ompl_iso/demos && $(MAKE) -f demos/CMakeFiles/demo_MAB_RRT.dir/build.make demos/CMakeFiles/demo_MAB_RRT.dir/disassembly/MAB_RRT_Demo.cpp.s
+.PHONY : disassembly/MAB_RRT_Demo.cpp.s
 
 disassembly/benchmark_occupancy_grid.o: disassembly/benchmark_occupancy_grid.cpp.o
 
@@ -2200,6 +2200,7 @@ help:
 	@echo "... package_source"
 	@echo "... demo_MultiLevelPlanarManipulator"
 	@echo "... demo_benchmark_occupancy_grid"
+	@echo "... demo_MAB_RRT"
 	@echo "... demo_SpaceTimePlanning"
 	@echo "... demo_MultiLevelPlanningRigidBody3D"
 	@echo "... demo_DubinsAirplane"
@@ -2229,7 +2230,6 @@ help:
 	@echo "... demo_SSTPinballPlanning"
 	@echo "... demo_HypercubeBenchmark"
 	@echo "... rebuild_cache"
-	@echo "... demo_MAB_SSRRT"
 	@echo "... demo_MultiLevelPlanningHyperCubeBenchmark"
 	@echo "... demo_PlannerData"
 	@echo "... demo_OptimalPlanning"
@@ -2366,9 +2366,9 @@ help:
 	@echo "... constraint/ConstrainedPlanningTorus.o"
 	@echo "... constraint/ConstrainedPlanningTorus.i"
 	@echo "... constraint/ConstrainedPlanningTorus.s"
-	@echo "... disassembly/MAB_SSRRT_Demo.o"
-	@echo "... disassembly/MAB_SSRRT_Demo.i"
-	@echo "... disassembly/MAB_SSRRT_Demo.s"
+	@echo "... disassembly/MAB_RRT_Demo.o"
+	@echo "... disassembly/MAB_RRT_Demo.i"
+	@echo "... disassembly/MAB_RRT_Demo.s"
 	@echo "... disassembly/benchmark_occupancy_grid.o"
 	@echo "... disassembly/benchmark_occupancy_grid.i"
 	@echo "... disassembly/benchmark_occupancy_grid.s"

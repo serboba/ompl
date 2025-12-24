@@ -1,6 +1,6 @@
-# MAB-SSRRT Demo
+# MAB-RRT Demo
 
-This directory contains demos for the **MAB-SSRRT** (Multi-Armed Bandit Sphere-Sampled RRT) planner.
+This directory contains demos for the **MAB-RRT** (Multi-Armed Bandit RRT) planner.
 
 ## Overview
 
@@ -15,7 +15,7 @@ The planner is particularly effective for:
 
 ## Files
 
-- **MAB_SSRRT_Demo.cpp**: Main demo executable
+- **MAB_RRT_Demo.cpp**: Main demo executable
 - **visualize_bugtrap.py**: Python script for visualizing bug trap results
 - **benchmark_baseline.yaml**: Default configuration file for the planner
 
@@ -27,7 +27,7 @@ The demo is automatically built when you build OMPL with demos enabled:
 cd /home/serboba/transferompl_ws/src/ompl_iso
 mkdir -p build && cd build
 cmake .. -DOMPL_BUILD_DEMOS=ON
-make demo_MAB_SSRRT
+make demo_MAB_RRT
 ```
 
 The executable will be located at: `build/demos/demo_MAB_SSRRT`
@@ -41,7 +41,7 @@ cd /home/serboba/transferompl_ws/src/ompl_iso/build
 export LD_LIBRARY_PATH=$PWD/src/ompl:$LD_LIBRARY_PATH
 
 # Run bug trap scenario (config file is in demos/disassembly/)
-./demos/demo_MAB_SSRRT \
+./demos/demo_MAB_RRT \
     --config ../demos/disassembly/benchmark_baseline.yaml \
     --planner bugtrap \
     --timeout 10
@@ -60,7 +60,7 @@ Options:
   --help              Show this help message
 
 Available scenarios:
-  mab-ssrrt   Standard 6D Assembly Demo
+  mab-rrt   Standard 6D Assembly Demo
   bugtrap     2D Bug Trap (Start inside U-shape, Goal outside)
 ```
 
@@ -68,7 +68,7 @@ Available scenarios:
 
 **Run bug trap scenario:**
 ```bash
-./demos/demo_MAB_SSRRT \
+./demos/demo_MAB_RRT \
     --config ./demos/benchmark_baseline.yaml \
     --planner bugtrap \
     --timeout 10
@@ -76,7 +76,7 @@ Available scenarios:
 
 **Run bug trap with debug mode (for visualization):**
 ```bash
-./demos/demo_MAB_SSRRT \
+./demos/demo_MAB_RRT \
     --config ./demos/benchmark_baseline.yaml \
     --planner bugtrap \
     --timeout 10 \
@@ -85,9 +85,9 @@ Available scenarios:
 
 **Run 6D assembly scenario:**
 ```bash
-./demos/demo_MAB_SSRRT \
+./demos/demo_MAB_RRT \
     --config ./demos/benchmark_baseline.yaml \
-    --planner mab-ssrrt \
+    --planner mab-rrt \
     --timeout 15
 ```
 
@@ -200,11 +200,11 @@ These files can be used for visualization and analysis.
 cd /home/serboba/transferompl_ws/src/ompl_iso
 mkdir -p build && cd build
 cmake .. -DOMPL_BUILD_DEMOS=ON
-make demo_MAB_SSRRT
+make demo_MAB_RRT
 
 # 2. Run bug trap with debug
 export LD_LIBRARY_PATH=$PWD/src/ompl:$LD_LIBRARY_PATH
-./demos/demo_MAB_SSRRT \
+./demos/demo_MAB_RRT \
     --config ./demos/benchmark_baseline.yaml \
     --planner bugtrap \
     --timeout 10 \
