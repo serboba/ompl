@@ -194,6 +194,13 @@
          adaptiveMaxExpectedValidityRate_ = config["adaptive_max_expected_validity_rate"].as<double>();
          adaptiveBurninMaxSteps_ = config["adaptive_burnin_max_steps"] ? 
                                    config["adaptive_burnin_max_steps"].as<int>() : 10;
+         
+         // Maximum radius limit (from YAML, or computed from state space bounds if not provided)
+         if (config["adaptive_max_radius"])
+         {
+             adaptiveMaxRadius_ = config["adaptive_max_radius"].as<double>();
+             OMPL_INFORM("DEBUG: Loaded adaptive_max_radius from YAML = %.10f", adaptiveMaxRadius_);
+         }
  
          // ----- Initial Uniform Check -----
          // Early exit optimization if problem is "easy" (high uniform validity)
@@ -296,10 +303,18 @@
      
      initializeArms();
      
-     // Compute maximum allowed burn-in radius from state space bounds
-     // Do this after initializeArms() to ensure state space is fully set up
-     adaptiveMaxRadius_ = computeMaxBurninRadius();
-     OMPL_INFORM("DEBUG: Computed max burn-in radius from state space bounds: %.6f", adaptiveMaxRadius_);
+    // Compute maximum allowed burn-in radius from state space bounds
+    // Do this after initializeArms() to ensure state space is fully set up
+    // Only compute if not already set from YAML config
+    if (adaptiveMaxRadius_ == std::numeric_limits<double>::infinity())
+    {
+        adaptiveMaxRadius_ = computeMaxBurninRadius();
+        OMPL_INFORM("DEBUG: Computed max burn-in radius from state space bounds: %.6f", adaptiveMaxRadius_);
+    }
+    else
+    {
+        OMPL_INFORM("DEBUG: Using adaptive_max_radius from YAML: %.6f", adaptiveMaxRadius_);
+    }
  }
  
  /**

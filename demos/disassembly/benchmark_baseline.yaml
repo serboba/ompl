@@ -23,6 +23,7 @@ forced_uniform_after_cylinder_valid_streak: 5
 adaptive_quasirandom_sample_size : 64
 adaptive_start_radius : 1.0
 adaptive_min_radius : 0.000001
+adaptive_max_radius : 25.0
 # Direct multipliers (no exp() applied)
 # To maintain same behavior as exp(-0.7) and exp(0.9):
 #   exp(-0.7) ≈ 0.496585 (shrinks by this factor)

@@ -183,6 +183,12 @@ void ompl::geometric::MAB_RRT::loadYAMLConfig(const std::string& yamlFilePath)
                              config["adaptive_shrink_step"].as<double>() : 0.1;
         adaptiveGrowStep_ = config["adaptive_grow_step"] ? 
                           config["adaptive_grow_step"].as<double>() : 0.1;
+        
+        // Maximum radius limit (from YAML, or computed from state space bounds if not provided)
+        if (config["adaptive_max_radius"])
+        {
+            adaptiveMaxRadius_ = config["adaptive_max_radius"].as<double>();
+        }
 
         // ----- Initial Uniform Check -----
         // Early exit optimization if problem is "easy" (high uniform validity)
@@ -288,11 +294,15 @@ void ompl::geometric::MAB_RRT::setup()
     
     // Compute maximum allowed burn-in radius from state space bounds
     // Do this after initializeArms() to ensure state space is fully set up
-    try {
-        adaptiveMaxRadius_ = computeMaxBurninRadius();
-    } catch (const std::exception& e) {
-        OMPL_WARN("Failed to compute max burn-in radius: %s. Using default.", e.what());
-        adaptiveMaxRadius_ = 1000.0;
+    // Only compute if not already set from YAML config
+    if (adaptiveMaxRadius_ == std::numeric_limits<double>::infinity())
+    {
+        try {
+            adaptiveMaxRadius_ = computeMaxBurninRadius();
+        } catch (const std::exception& e) {
+            OMPL_WARN("Failed to compute max burn-in radius: %s. Using default.", e.what());
+            adaptiveMaxRadius_ = 1000.0;
+        }
     }
 }
 
