@@ -19,19 +19,19 @@ mab_uniform_sphere_window_size : 256    # Sliding window size for MAB arm select
 forced_uniform_after_cylinder_valid_streak: 5
 
 # Adaptive Sphere Sampling Parameters
-adaptive_quasirandom_sample_size : 32
+adaptive_quasirandom_sample_size : 32  # Initial sample size for bisection search
 # Bisection search parameters (replaces grow/shrink approach)
 adaptive_bisection_lower_radius : 0.000001
 adaptive_bisection_upper_radius : 10.0
 adaptive_bisection_tolerance : 0.0001  # Convergence tolerance for bisection
-adaptive_min_expected_validity_rate : 0.60
-adaptive_max_expected_validity_rate: 0.65
+adaptive_min_expected_validity_rate : 0.10
+adaptive_max_expected_validity_rate: 0.50
 adaptive_burnin_max_steps: 50  # Max iterations for bisection search
-# Legacy parameters (kept for compatibility, not used with bisection)
-adaptive_start_radius : 0.1
-adaptive_min_radius : 0.00001
-adaptive_shrink_step : 0.05
-adaptive_grow_step : 0.9
+# Wilson CI parameters for robust bisection decisions
+adaptive_wilson_ci_enabled: true  # Use Wilson CI instead of raw validity rates
+adaptive_wilson_ci_z_score: 1.96  # Z-score for 95% confidence interval (1.96 = 95%, 2.576 = 99%)
+adaptive_wilson_ci_max_sample_size: 512  # Maximum sample size when resampling on inconclusive results
+adaptive_wilson_ci_sample_multiplier: 2.0  # Multiply sample size by this factor on inconclusive results
 
 pca_filter_top_percent: 1.0  # Percentage of top PCA components to keep, default 1.0 to use all valid samples for online PCA recalibration
 

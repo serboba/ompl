@@ -368,22 +368,61 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
             
             sorted_radii = sorted(burnin_radii, reverse=True)  # For drawing other circles
             
+            # Find initial burn-in radius from first burn-in step (step 0 or minimum step)
+            # This is more accurate than using largest radius
+            min_burnin_step = float('inf')
+            initial_burnin_radius = None
+            for sample in samples_data:
+                if sample.get('phase') == 'burnin':
+                    try:
+                        step_str = sample.get('burnin_step', '-1')
+                        if step_str and step_str != '-1':
+                            step = int(step_str)
+                            radius = float(sample.get('radius', 0))
+                            if step < min_burnin_step and radius > 0:
+                                min_burnin_step = step
+                                initial_burnin_radius = radius
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Fallback: if we couldn't find by step, use smallest radius (typically the starting radius)
+            if initial_burnin_radius is None and sorted_radii:
+                initial_burnin_radius = sorted_radii[-1]  # Smallest radius
+            
+            # Debug: print initial and final radii
+            if initial_burnin_radius is not None:
+                print(f"[DEBUG] Initial burn-in radius: {initial_burnin_radius:.6f}")
+            if final_burnin_radius is not None:
+                print(f"[DEBUG] Final burn-in radius: {final_burnin_radius:.6f}")
+            
             # Start position (origin for burn-in circles)
             start_x, start_y = 0.0, 0.0
             
-            # Draw final radius first (so it's on top and visible)
+            # Draw initial burn-in radius in purple on right plot (ax2) only
+            # Draw it first (lower zorder) so final radius appears on top
+            # Always draw it if it exists, even if it equals final (they'll overlap but both visible)
+            if initial_burnin_radius is not None:
+                # Use a very thick, bold purple line to make it clearly visible
+                initial_circle = plt.Circle((start_x, start_y), initial_burnin_radius, 
+                                          fill=False, edgecolor='#8B00FF',  # Bold purple color
+                                          linewidth=5.0, alpha=1.0, zorder=7,  # Very bold, full opacity, lower zorder so final is on top
+                                          label='Initial Burn-in Radius')
+                ax2.add_patch(initial_circle)
+                print(f"[DEBUG] Drew initial burn-in radius circle at radius {initial_burnin_radius:.6f}")
+            
+            # Draw final radius (so it's on top and visible)
             for ax in [ax1, ax2]:
                 # Draw final radius with orange color - visible but not blocking samples
                 if final_burnin_radius is not None:
                     final_circle = plt.Circle((start_x, start_y), final_burnin_radius, 
                                             fill=False, edgecolor='#FF6600', 
-                                            linewidth=2.5, alpha=0.7, zorder=9,
+                                            linewidth=3.0, alpha=0.85, zorder=10,  # Higher zorder and bolder
                                             label='Final Burn-in Radius')
                     ax.add_patch(final_circle)
                 
                 # Draw other radii as thin grey circles
                 for radius in sorted_radii:
-                    if radius != final_burnin_radius:
+                    if radius != final_burnin_radius and radius != initial_burnin_radius:
                         circle = plt.Circle((start_x, start_y), radius, 
                                           fill=False, color='#888888', 
                                           linewidth=0.8, alpha=0.5, zorder=0)
@@ -495,9 +534,9 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                         planning_valid_cylinder_down_y.append(y_inv)
                     else:
                         # Other samplers (start, etc.) - plot individually
-                        if sampler == 'start':
-                            color = '#FFFF00'  # Yellow for start
-                            edge_color = '#CCCC00'
+                        if sampler == 'start' or sampler == 'root':
+                            color = '#808080'  # Gray for start/root (no yellow)
+                            edge_color = 'none'
                         else:
                             color = '#808080'  # Gray for unknown
                             edge_color = 'none'
@@ -526,19 +565,22 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
     
     # Load and plot path on both plots
     path_plotted = False
+    x_path = []
+    y_path = []
+    path_samplers = []
+    sampler_path_colors = {}
     if os.path.exists(path_file):
         x_path, y_path, path_samplers = load_path(path_file)
         
         # Define sampler colors for path - match the edge colors
+        # Note: 'start' and 'root' are skipped - we use the actual connection sampler instead
         sampler_path_colors = {
             'uniform': '#0066FF',      # Bright Blue
             'cylinder_up': '#006400',  # Dark Green
             'cylinder_down': '#FF1493', # Deep Pink (to match samples)
             'cylinder': '#006400',      # Dark Green (default when UP/DOWN unknown)
             'connected': '#00FF00',     # Bright Green (for connected samples)
-            'start': '#FFFF00',         # Yellow (for start state)
-            'root': '#FFFF00',          # Yellow (for root/start)
-            'unknown': '#FF0000'        # Red (to make it obvious when sampler info is missing)
+            'unknown': '#808080'        # Gray (default fallback)
         }
         
         # Plot path on both subplots with sampler colors
@@ -551,7 +593,21 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                 # Plot each segment with its sampler color (use sampler of the target waypoint to match edge coloring)
                 for i in range(len(x_path) - 1):
                     # Use the sampler of the target waypoint (i+1) to match edge coloring logic
+                    # Skip 'start' and 'root' - use the next valid sampler
                     sampler = path_samplers[i+1] if (i+1) < len(path_samplers) else path_samplers[i] if i < len(path_samplers) else 'unknown'
+                    # If sampler is 'start' or 'root', try to use the source waypoint's sampler, or look ahead
+                    if sampler == 'start' or sampler == 'root':
+                        # Try source waypoint
+                        if i < len(path_samplers) and path_samplers[i] not in ['start', 'root', 'unknown']:
+                            sampler = path_samplers[i]
+                        else:
+                            # Look ahead for next valid sampler
+                            for j in range(i+2, len(path_samplers)):
+                                if path_samplers[j] not in ['start', 'root', 'unknown']:
+                                    sampler = path_samplers[j]
+                                    break
+                            else:
+                                sampler = 'unknown'
                     color = sampler_path_colors.get(sampler, '#808080')
                     ax.plot([x_path[i], x_path[i+1]], [y_path_inv[i], y_path_inv[i+1]], 
                            '-', color=color, linewidth=2.5, zorder=5, alpha=0.8)
@@ -679,13 +735,314 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
         print(f"Legend saved to: {legend_output_file}")
         print(f"Legend saved to: {legend_png_file}")
     
+    # Save combined figure (both plots)
     plt.tight_layout()
     plt.savefig(output_file, format='pdf', bbox_inches='tight', dpi=300)
     print(f"Visualization saved to: {output_file}")
     png_file = output_file.replace('.pdf', '.png')
     plt.savefig(png_file, format='png', bbox_inches='tight', dpi=300)
     print(f"Visualization saved to: {png_file}")
-    plt.close()  # Close figure instead of showing
+    
+    # Save left plot separately
+    left_output_file = output_file.replace('.pdf', '_left.pdf').replace('.png', '_left.pdf')
+    left_fig = plt.figure(figsize=(10, 8), dpi=150)
+    left_ax = left_fig.add_subplot(1, 1, 1)
+    
+    # Redraw everything on left plot (same as ax1)
+    if use_grid and grid_data is not None:
+        draw_occupancy_grid(left_ax, grid_data, grid_width, grid_height)
+    elif not use_grid:
+        draw_bug_trap(left_ax)
+    
+    # Redraw burn-in circles
+    if burnin_radii:
+        start_x, start_y = 0.0, 0.0
+        if final_burnin_radius is not None:
+            final_circle = plt.Circle((start_x, start_y), final_burnin_radius, 
+                                    fill=False, edgecolor='#FF6600', 
+                                    linewidth=2.5, alpha=0.7, zorder=9,
+                                    label='Final Burn-in Radius')
+            left_ax.add_patch(final_circle)
+        for radius in sorted_radii:
+            if radius != final_burnin_radius and radius != initial_burnin_radius:
+                circle = plt.Circle((start_x, start_y), radius, 
+                                  fill=False, color='#888888', 
+                                  linewidth=0.8, alpha=0.5, zorder=0)
+                left_ax.add_patch(circle)
+    
+    # Redraw edges
+    if edges:
+        for edge in edges:
+            y1_inv = invert_y_if_needed(edge['y1'])
+            y2_inv = invert_y_if_needed(edge['y2'])
+            left_ax.plot([edge['x1'], edge['x2']], [y1_inv, y2_inv], 
+                    '-', color='#888888', linewidth=0.8, alpha=0.4, zorder=1)
+    
+    # Redraw path
+    if path_plotted:
+        y_path_inv = invert_y_if_needed(y_path) if use_grid else y_path
+        if len(path_samplers) > 0 and len(path_samplers) == len(x_path):
+            for i in range(len(x_path) - 1):
+                sampler = path_samplers[i+1] if (i+1) < len(path_samplers) else path_samplers[i] if i < len(path_samplers) else 'unknown'
+                # If sampler is 'start' or 'root', try to use the source waypoint's sampler, or look ahead
+                if sampler == 'start' or sampler == 'root':
+                    # Try source waypoint
+                    if i < len(path_samplers) and path_samplers[i] not in ['start', 'root', 'unknown']:
+                        sampler = path_samplers[i]
+                    else:
+                        # Look ahead for next valid sampler
+                        for j in range(i+2, len(path_samplers)):
+                            if path_samplers[j] not in ['start', 'root', 'unknown']:
+                                sampler = path_samplers[j]
+                                break
+                        else:
+                            sampler = 'unknown'
+                color = sampler_path_colors.get(sampler, '#808080')
+                left_ax.plot([x_path[i], x_path[i+1]], [y_path_inv[i], y_path_inv[i+1]], 
+                           '-', color=color, linewidth=2.5, zorder=5, alpha=0.8)
+            for i in range(len(x_path)):
+                sampler = path_samplers[i] if i < len(path_samplers) else 'unknown'
+                color = sampler_path_colors.get(sampler, '#FF0000')
+                left_ax.plot(x_path[i], y_path_inv[i], 'o', color=color, markersize=8,
+                           markerfacecolor=color, markeredgecolor='white',
+                           markeredgewidth=1.5, zorder=6)
+        if len(x_path) > 0:
+            left_ax.plot(x_path[0], y_path_inv[0], 's', color='#27ae60', markersize=12,
+                    markerfacecolor='#2ecc71', markeredgecolor='white', markeredgewidth=2,
+                    label='Start', zorder=7)
+            goal_x = x_path[-1]
+            goal_y = y_path_inv[-1]
+            goal_circle = plt.Circle((goal_x, goal_y), 0.075, fill=True, 
+                                    facecolor='red', edgecolor='red', 
+                                    linewidth=3, alpha=0.5, zorder=2)
+            left_ax.add_patch(goal_circle)
+            left_ax.plot(goal_x, goal_y, 'o', color='red', markersize=15,
+                    markerfacecolor='red', markeredgecolor='red', 
+                    markeredgewidth=2, label='Goal', zorder=3)
+    
+    # Configure left plot
+    if use_grid and grid_width is not None and grid_height is not None:
+        half_width = grid_width / 2.0
+        half_height = grid_height / 2.0
+        left_ax.set_xlim(-half_width - 0.5, half_width + 0.5)
+        left_ax.set_ylim(half_height + 0.5, -half_height - 0.5)
+        left_ax.set_xlabel('X Position', fontsize=16)
+        left_ax.set_ylabel('Y Position', fontsize=16)
+    else:
+        left_ax.set_xlim(-5, 15)
+        left_ax.set_ylim(-5, 5)
+        left_ax.set_xlabel('X Position (m)', fontsize=16)
+        left_ax.set_ylabel('Y Position (m)', fontsize=16)
+    left_ax.set_aspect('equal')
+    if not use_grid:
+        left_ax.grid(True, linestyle='--', alpha=0.3, linewidth=0.5)
+    left_ax.set_title('RRT Tree with Valid/Invalid Samples', pad=15, fontsize=18)
+    left_ax.tick_params(axis='both', which='major', labelsize=14)
+    
+    left_fig.tight_layout()
+    left_fig.savefig(left_output_file, format='pdf', bbox_inches='tight', dpi=300)
+    print(f"Left plot saved to: {left_output_file}")
+    left_png_file = left_output_file.replace('.pdf', '.png')
+    left_fig.savefig(left_png_file, format='png', bbox_inches='tight', dpi=300)
+    print(f"Left plot saved to: {left_png_file}")
+    plt.close(left_fig)
+    
+    # Save right plot separately
+    right_output_file = output_file.replace('.pdf', '_right.pdf').replace('.png', '_right.pdf')
+    right_fig = plt.figure(figsize=(10, 8), dpi=150)
+    right_ax = right_fig.add_subplot(1, 1, 1)
+    
+    # Redraw everything on right plot (same as ax2, including initial radius)
+    if use_grid and grid_data is not None:
+        draw_occupancy_grid(right_ax, grid_data, grid_width, grid_height)
+    elif not use_grid:
+        draw_bug_trap(right_ax)
+    
+    # Redraw burn-in circles (including initial radius)
+    if burnin_radii:
+        start_x, start_y = 0.0, 0.0
+        # Draw initial radius first (purple)
+        if initial_burnin_radius is not None:
+            initial_circle = plt.Circle((start_x, start_y), initial_burnin_radius, 
+                                      fill=False, edgecolor='#8B00FF', 
+                                      linewidth=5.0, alpha=1.0, zorder=7,
+                                      label='Initial Burn-in Radius')
+            right_ax.add_patch(initial_circle)
+        # Draw final radius (orange)
+        if final_burnin_radius is not None:
+            final_circle = plt.Circle((start_x, start_y), final_burnin_radius, 
+                                    fill=False, edgecolor='#FF6600', 
+                                    linewidth=3.0, alpha=0.85, zorder=10,
+                                    label='Final Burn-in Radius')
+            right_ax.add_patch(final_circle)
+        # Draw other radii
+        for radius in sorted_radii:
+            if radius != final_burnin_radius and radius != initial_burnin_radius:
+                circle = plt.Circle((start_x, start_y), radius, 
+                                  fill=False, color='#888888', 
+                                  linewidth=0.8, alpha=0.5, zorder=0)
+                right_ax.add_patch(circle)
+    
+    # Redraw edges
+    if edges:
+        for edge in edges:
+            y1_inv = invert_y_if_needed(edge['y1'])
+            y2_inv = invert_y_if_needed(edge['y2'])
+            right_ax.plot([edge['x1'], edge['x2']], [y1_inv, y2_inv], 
+                    '-', color='#888888', linewidth=0.8, alpha=0.4, zorder=1)
+    
+    # Redraw samples
+    if samples_data:
+        # Burn-in samples
+        burnin_valid_x_list = []
+        burnin_valid_y_list = []
+        burnin_invalid_x_list = []
+        burnin_invalid_y_list = []
+        for sample in samples_data:
+            if sample.get('phase') == 'burnin':
+                x, y = sample['x'], sample['y']
+                y_inv = invert_y_if_needed(y)
+                is_valid = sample['is_valid']
+                if not show_invalid and not is_valid:
+                    continue
+                if is_valid:
+                    burnin_valid_x_list.append(x)
+                    burnin_valid_y_list.append(y_inv)
+                else:
+                    burnin_invalid_x_list.append(x)
+                    burnin_invalid_y_list.append(y_inv)
+        if burnin_valid_x_list:
+            right_ax.scatter(burnin_valid_x_list, burnin_valid_y_list, 
+                          c='#2ecc71', s=25, alpha=1.0, 
+                          edgecolors='#808080', linewidths=0.5, zorder=4, marker='o',
+                          label='Burn-in Valid')
+        if show_invalid and burnin_invalid_x_list:
+            right_ax.scatter(burnin_invalid_x_list, burnin_invalid_y_list, 
+                          c='#e74c3c', s=25, alpha=1.0, 
+                          edgecolors='#808080', linewidths=0.5, zorder=4, marker='o',
+                          label='Burn-in Invalid')
+        
+        # Planning samples
+        planning_valid_uniform_x = []
+        planning_valid_uniform_y = []
+        planning_valid_cylinder_up_x = []
+        planning_valid_cylinder_up_y = []
+        planning_valid_cylinder_down_x = []
+        planning_valid_cylinder_down_y = []
+        planning_invalid_x = []
+        planning_invalid_y = []
+        for sample in samples_data:
+            if sample.get('phase') == 'burnin':
+                continue
+            x, y = sample['x'], sample['y']
+            y_inv = invert_y_if_needed(y)
+            is_valid = sample['is_valid']
+            sampler = sample['sampler']
+            if not is_valid:
+                if not show_invalid:
+                    continue
+                planning_invalid_x.append(x)
+                planning_invalid_y.append(y_inv)
+            else:
+                if sampler == 'uniform':
+                    planning_valid_uniform_x.append(x)
+                    planning_valid_uniform_y.append(y_inv)
+                elif sampler == 'cylinder_up':
+                    planning_valid_cylinder_up_x.append(x)
+                    planning_valid_cylinder_up_y.append(y_inv)
+                elif sampler == 'cylinder_down':
+                    planning_valid_cylinder_down_x.append(x)
+                    planning_valid_cylinder_down_y.append(y_inv)
+                elif sampler != 'start' and sampler != 'root':
+                    right_ax.scatter(x, y_inv, c='#808080', s=50, alpha=0.95, 
+                                  edgecolors='none', linewidths=0.5, zorder=8, marker='o')
+        if planning_valid_uniform_x:
+            right_ax.scatter(planning_valid_uniform_x, planning_valid_uniform_y, 
+                          c='#0066FF', s=50, alpha=0.95, edgecolors='#0033CC', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Uniform')
+        if planning_valid_cylinder_up_x:
+            right_ax.scatter(planning_valid_cylinder_up_x, planning_valid_cylinder_up_y, 
+                          c='#006400', s=50, alpha=0.95, edgecolors='#004400', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Cylinder Up')
+        if planning_valid_cylinder_down_x:
+            right_ax.scatter(planning_valid_cylinder_down_x, planning_valid_cylinder_down_y, 
+                          c='#FF1493', s=50, alpha=0.95, edgecolors='#CC0066', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Cylinder Down')
+        if show_invalid and planning_invalid_x:
+            right_ax.scatter(planning_invalid_x, planning_invalid_y, 
+                          c='#FF0000', s=35, alpha=0.8, edgecolors='none', zorder=7, marker='o',
+                          label='Invalid Samples')
+    
+    # Redraw path
+    if path_plotted:
+        y_path_inv = invert_y_if_needed(y_path) if use_grid else y_path
+        if len(path_samplers) > 0 and len(path_samplers) == len(x_path):
+            for i in range(1, len(x_path)):
+                sampler = path_samplers[i] if i < len(path_samplers) else 'unknown'
+                color = sampler_path_colors.get(sampler, '#FF0000')
+                if i > 0:
+                    sampler_prev = path_samplers[i-1] if (i-1) < len(path_samplers) else 'unknown'
+                    # If sampler is 'start' or 'root', try to use the next valid sampler
+                    if sampler_prev == 'start' or sampler_prev == 'root':
+                        # Use current waypoint's sampler if valid
+                        if sampler not in ['start', 'root', 'unknown']:
+                            sampler_prev = sampler
+                        else:
+                            # Look ahead for next valid sampler
+                            for j in range(i+1, len(path_samplers)):
+                                if path_samplers[j] not in ['start', 'root', 'unknown']:
+                                    sampler_prev = path_samplers[j]
+                                    break
+                            else:
+                                sampler_prev = 'unknown'
+                    color_prev = sampler_path_colors.get(sampler_prev, '#808080')
+                    right_ax.plot([x_path[i-1], x_path[i]], [y_path_inv[i-1], y_path_inv[i]], 
+                               '-', color=color_prev, linewidth=2.5, zorder=5, alpha=0.8)
+                right_ax.plot(x_path[i], y_path_inv[i], 'o', color=color, markersize=8,
+                           markerfacecolor=color, markeredgecolor='white',
+                           markeredgewidth=1.5, zorder=6)
+        if len(x_path) > 0:
+            right_ax.plot(x_path[0], y_path_inv[0], 's', color='#27ae60', markersize=12,
+                    markerfacecolor='#2ecc71', markeredgecolor='white', markeredgewidth=2,
+                    label='Start', zorder=7)
+            goal_x = x_path[-1]
+            goal_y = y_path_inv[-1]
+            goal_circle = plt.Circle((goal_x, goal_y), 0.075, fill=True, 
+                                    facecolor='red', edgecolor='red', 
+                                    linewidth=3, alpha=0.5, zorder=2)
+            right_ax.add_patch(goal_circle)
+            right_ax.plot(goal_x, goal_y, 'o', color='red', markersize=15,
+                    markerfacecolor='red', markeredgecolor='red', 
+                    markeredgewidth=2, label='Goal', zorder=3)
+    
+    # Configure right plot (no title)
+    if use_grid and grid_width is not None and grid_height is not None:
+        half_width = grid_width / 2.0
+        half_height = grid_height / 2.0
+        right_ax.set_xlim(-half_width - 0.5, half_width + 0.5)
+        right_ax.set_ylim(half_height + 0.5, -half_height - 0.5)
+        right_ax.set_xlabel('X Position', fontsize=16)
+        right_ax.set_ylabel('Y Position', fontsize=16)
+    else:
+        right_ax.set_xlim(-5, 15)
+        right_ax.set_ylim(-5, 5)
+        right_ax.set_xlabel('X Position (m)', fontsize=16)
+        right_ax.set_ylabel('Y Position (m)', fontsize=16)
+    right_ax.set_aspect('equal')
+    if not use_grid:
+        right_ax.grid(True, linestyle='--', alpha=0.3, linewidth=0.5)
+    # No title for right plot
+    right_ax.tick_params(axis='both', which='major', labelsize=14)
+    
+    right_fig.tight_layout()
+    right_fig.savefig(right_output_file, format='pdf', bbox_inches='tight', dpi=300)
+    print(f"Right plot saved to: {right_output_file}")
+    right_png_file = right_output_file.replace('.pdf', '.png')
+    right_fig.savefig(right_png_file, format='png', bbox_inches='tight', dpi=300)
+    print(f"Right plot saved to: {right_png_file}")
+    plt.close(right_fig)
+    
+    plt.close(fig)  # Close main figure
     
     return final_burnin_radius
 

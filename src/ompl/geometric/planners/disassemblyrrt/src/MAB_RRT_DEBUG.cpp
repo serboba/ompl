@@ -849,17 +849,26 @@ void ompl::geometric::MAB_RRT_DEBUG::finalizeBurnin(
      }
      
      auto& sphere = samplingArms_.at(0)->sphere;
+     // Clamp bestRadius to adaptiveMaxRadius_ to prevent it from exceeding the max limit
+     // (bestRadius can be updated from sampledAtRadius which can be very large)
+     double clampedBestRadius = std::min(sphere->bestRadius, adaptiveMaxRadius_);
+     
      // Exponential growth: extensionHeight = bestRadius * (exp(extensionFactor - 1.0) - 1.0)
      // This allows fast exponential growth even when bestRadius is very small (e.g., 0.001)
      // extensionFactor = 1.0 → extensionHeight = 0 (no extension)
      // extensionFactor = 2.0 → extensionHeight = bestRadius * (exp(1.0) - 1.0) ≈ bestRadius * 1.718
      // extensionFactor = 3.0 → extensionHeight = bestRadius * (exp(2.0) - 1.0) ≈ bestRadius * 6.389
-     double extensionHeight = sphere->bestRadius * (std::exp(extensionFactor - 1.0) - 1.0);
+     double extensionHeight = clampedBestRadius * (std::exp(extensionFactor - 1.0) - 1.0);
      
      // DEBUG: Print extension calculation
      if (selectedSamplerArm_ == SamplerArm::CYLINDER_UP || selectedSamplerArm_ == SamplerArm::CYLINDER_DOWN) {
-         OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f, extensionFactor=%.6f, extensionHeight=%.6f", 
-                    sphere->bestRadius, extensionFactor, extensionHeight);
+         if (sphere->bestRadius > adaptiveMaxRadius_) {
+             OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f (clamped to %.6f), extensionFactor=%.6f, extensionHeight=%.6f", 
+                        sphere->bestRadius, clampedBestRadius, extensionFactor, extensionHeight);
+         } else {
+             OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f, extensionFactor=%.6f, extensionHeight=%.6f", 
+                        clampedBestRadius, extensionFactor, extensionHeight);
+         }
      }
      
      // PHASE 1: Select sampling arm using single-layer MAB (3 arms)
