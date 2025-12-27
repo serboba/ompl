@@ -184,10 +184,13 @@ void ompl::geometric::MAB_RRT::loadYAMLConfig(const std::string& yamlFilePath)
         adaptiveGrowStep_ = config["adaptive_grow_step"] ? 
                           config["adaptive_grow_step"].as<double>() : 0.1;
         
-        // Maximum radius limit (from YAML, or computed from state space bounds if not provided)
-        if (config["adaptive_max_radius"])
+        // Maximum radius limit (always from YAML config - required)
+        adaptiveMaxRadius_ = config["adaptive_max_radius"] ? 
+                            config["adaptive_max_radius"].as<double>() : 
+                            std::numeric_limits<double>::infinity();
+        if (adaptiveMaxRadius_ == std::numeric_limits<double>::infinity())
         {
-            adaptiveMaxRadius_ = config["adaptive_max_radius"].as<double>();
+            throw std::runtime_error("adaptive_max_radius must be specified in YAML config");
         }
 
         // ----- Initial Uniform Check -----
@@ -292,17 +295,11 @@ void ompl::geometric::MAB_RRT::setup()
     
     initializeArms();
     
-    // Compute maximum allowed burn-in radius from state space bounds
-    // Do this after initializeArms() to ensure state space is fully set up
-    // Only compute if not already set from YAML config
+    // adaptiveMaxRadius_ should already be set from YAML config in loadYAMLConfig()
+    // No fallback computation - it must be specified in the config file
     if (adaptiveMaxRadius_ == std::numeric_limits<double>::infinity())
     {
-        try {
-            adaptiveMaxRadius_ = computeMaxBurninRadius();
-        } catch (const std::exception& e) {
-            OMPL_WARN("Failed to compute max burn-in radius: %s. Using default.", e.what());
-            adaptiveMaxRadius_ = 1000.0;
-        }
+        throw std::runtime_error("adaptive_max_radius must be specified in YAML config file");
     }
 }
 
@@ -551,11 +548,10 @@ double ompl::geometric::MAB_RRT::computeMaxBurninRadius() const
         }
     }
     
-    // If we couldn't determine bounds, return a large default
+    // If we couldn't determine bounds, throw error
     if (minExtent == std::numeric_limits<double>::infinity())
     {
-        OMPL_WARN("Could not determine max radius from bounds, using default");
-        return 1000.0;
+        throw std::runtime_error("Could not determine max radius from bounds - adaptive_max_radius must be specified in YAML config");
     }
     
     return minExtent;
