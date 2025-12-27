@@ -3,11 +3,14 @@
 Visualization script for MAB-RRT burn-in phase radius search.
 
 This script creates an academic-style visualization showing:
-- Burn-in phase radius search steps (bisection search)
+- Burn-in phase radius search steps (grow/shrink adaptive)
 - Circles colored by step number (gradient from blue to purple)
 - Final valid radius highlighted in green
 - Step numbers and radius values annotated
 """
+
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to prevent hanging
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -25,7 +28,7 @@ try:
 except ImportError:
     HAS_YAML = False
 
-# Set matplotlib style for academic publications
+# Set matplotlib style for academic publications (matching visualize_bugtrap.py exactly)
 try:
     plt.style.use('seaborn-v0_8-paper')
 except:
@@ -35,7 +38,7 @@ except:
         pass
 
 plt.rcParams.update({
-    'font.size': 11,
+    'font.size': 11,  # Match visualize_bugtrap.py exactly
     'font.family': 'sans-serif',
     'font.sans-serif': ['DejaVu Sans', 'Arial', 'Helvetica'],
     'axes.labelsize': 12,
@@ -174,6 +177,33 @@ def load_config_thresholds(config_file=None):
     return min_threshold, max_threshold
 
 
+def compute_wilson_ci(k, n, z=1.96):
+    """Compute Wilson confidence interval for binomial proportion.
+    
+    Parameters:
+    - k: Number of successes (valid samples)
+    - n: Total number of samples
+    - z: Z-score for confidence level (default 1.96 for 95% CI)
+    
+    Returns:
+    - (ci_low, ci_high): Confidence interval bounds
+    """
+    if n == 0:
+        return (0.0, 1.0)
+    
+    p_hat = k / n
+    
+    # Wilson CI formula
+    denom = 1.0 + (z * z) / n
+    center = (p_hat + (z * z) / (2.0 * n)) / denom
+    half = (z / denom) * np.sqrt((p_hat * (1.0 - p_hat) / n) + (z * z) / (4.0 * n * n))
+    
+    ci_low = max(0.0, center - half)
+    ci_high = min(1.0, center + half)
+    
+    return (ci_low, ci_high)
+
+
 def load_burnin_samples(filename, config_file=None):
     """Load burn-in samples from CSV and organize by burn-in step numbers.
     
@@ -183,6 +213,17 @@ def load_burnin_samples(filename, config_file=None):
     """
     # Load thresholds from config for step type determination (not used here but available)
     min_threshold, max_threshold = load_config_thresholds(config_file)
+    
+    # Load Wilson CI parameters from config if available
+    wilson_z_score = 1.96  # Default 95% CI
+    if config_file and HAS_YAML:
+        try:
+            with open(config_file, 'r') as f:
+                config = yaml.safe_load(f)
+                if config and 'adaptive_wilson_ci_z_score' in config:
+                    wilson_z_score = config['adaptive_wilson_ci_z_score']
+        except:
+            pass
     
     # Group samples by burn-in step number (from CSV)
     all_samples_by_step = defaultdict(lambda: {'valid': [], 'invalid': [], 'radius': None})
@@ -236,53 +277,31 @@ def load_burnin_samples(filename, config_file=None):
         total_count = len(valid_samples) + len(invalid_samples)
         valid_count = len(valid_samples)
         
-        # For bisection search, identify step types:
-        # Step 0 = initial lower bound
-        # Step 1 = initial upper bound (if exists)
-        # Step 2+ = bisection steps
-        if step_num == 0:
-            step_type = 'initial_lower'
-            decision = None  # No decision for initial bounds
-        elif step_num == 1 and len(sorted_steps) > 1:
-            # Check if this is actually the upper bound by comparing radii
-            # Upper bound should be larger than lower bound
-            if len(burnin_steps) > 0 and radius > burnin_steps[0]['radius']:
-                step_type = 'initial_upper'
-                decision = None  # No decision for initial bounds
-            else:
-                step_type = 'bisection'
-                decision = None  # Will determine from validity rate
-        else:
-            step_type = 'bisection'
-            decision = None  # Will determine from validity rate
-        
+        # For grow/shrink approach, all steps are adaptive adjustments
+        step_type = 'grow_shrink'
         validity_rate = valid_count / total_count if total_count > 0 else 0.0
         
-        # Determine decision direction for bisection steps
-        if step_type == 'bisection' and total_count > 0:
-            # Get thresholds from config
-            min_threshold, max_threshold = load_config_thresholds(config_file)
-            
-            # Determine decision based on validity rate
-            # Note: Even if validity is in target range, if there are more steps,
-            # the algorithm continued, so we show what direction it would go
-            # (or if it's the last step and in range, it's accepted)
-            if validity_rate < min_threshold:
-                # Validity too low → need smaller radius → reduce upper bound (go left/down)
-                decision = 'left'  # or 'down' - reducing radius
-            elif validity_rate > max_threshold:
-                # Validity too high → need larger radius → increase lower bound (go right/up)
-                decision = 'right'  # or 'up' - increasing radius
-            else:
-                # In target range
-                # If this is the final step, it's accepted
-                # Otherwise, the algorithm might continue to refine
-                # For visualization, we'll show 'accept' only if it's the final step
-                # For intermediate steps in range, we need to infer from next step's radius
-                decision = 'accept'  # Will be refined below if not final
+        # Get thresholds from config
+        min_threshold, max_threshold = load_config_thresholds(config_file)
+        
+        # Determine decision based on validity rate and radius change
+        # For grow/shrink: shrink if validity too low, grow if validity too high
+        if validity_rate < min_threshold:
+            # Validity too low → shrink radius
+            decision = 'shrink'
+        elif validity_rate > max_threshold:
+            # Validity too high → grow radius
+            decision = 'grow'
+        else:
+            # In target range → accept (if final) or continue
+            decision = 'accept'
         
         # Final step is the last one
         is_final = (step_num == sorted_steps[-1])
+        
+        # For grow/shrink, we don't use Wilson CI, but we can compute it for display if needed
+        ci_low, ci_high = compute_wilson_ci(valid_count, total_count, wilson_z_score)
+        is_inconclusive = False  # Not used in grow/shrink approach
         
         burnin_steps.append({
             'radius': radius,
@@ -292,27 +311,26 @@ def load_burnin_samples(filename, config_file=None):
             'valid_count': valid_count,
             'total_count': total_count,
             'validity_rate': validity_rate,
+            'ci_low': ci_low,  # Keep for optional display
+            'ci_high': ci_high,  # Keep for optional display
+            'is_inconclusive': is_inconclusive,
             'step_type': step_type,
-            'decision': decision,  # 'left'/'down', 'right'/'up', 'accept', or None
+            'decision': decision,  # 'shrink', 'grow', or 'accept'
             'is_final': is_final
         })
     
-    # Second pass: refine decisions for bisection steps that are in target range
-    # by checking if next step's radius is smaller or larger
+    # Second pass: refine decisions by checking actual radius changes
+    # This helps identify the actual action taken (grow/shrink) even if validity was in range
     for i, step in enumerate(burnin_steps):
-        if (step['step_type'] == 'bisection' and 
-            step.get('decision') == 'accept' and 
-            not step['is_final'] and
-            i + 1 < len(burnin_steps)):
+        if step.get('decision') == 'accept' and not step['is_final'] and i + 1 < len(burnin_steps):
             next_step = burnin_steps[i + 1]
-            if next_step['step_type'] == 'bisection':
-                # If next radius is smaller, we went left/down
-                # If next radius is larger, we went right/up
-                if next_step['radius'] < step['radius']:
-                    step['decision'] = 'left'
-                elif next_step['radius'] > step['radius']:
-                    step['decision'] = 'right'
-                # If same (shouldn't happen), keep 'accept'
+            # If next radius is smaller, we shrunk
+            # If next radius is larger, we grew
+            if next_step['radius'] < step['radius']:
+                step['decision'] = 'shrink'
+            elif next_step['radius'] > step['radius']:
+                step['decision'] = 'grow'
+            # If same (shouldn't happen), keep 'accept'
     
     return burnin_steps
 
@@ -332,115 +350,164 @@ def plot_convergence_evolution(burnin_steps, output_file=None, config_file=None)
     # Extract data for plotting
     step_nums = [step['step_num'] for step in burnin_steps]
     radii = [step['radius'] for step in burnin_steps]
-    validity_rates = [step['validity_rate'] for step in burnin_steps]
+    validity_rates_raw = [step['validity_rate'] for step in burnin_steps]
+    # Convert validity rates to percentage if they're in decimal (0-1 range)
+    # Check if max value is <= 1.0 to determine if conversion is needed
+    if validity_rates_raw and max(validity_rates_raw) <= 1.0:
+        validity_rates = [v * 100.0 for v in validity_rates_raw]
+    else:
+        validity_rates = validity_rates_raw
+    ci_lows = [step.get('ci_low', 0.0) for step in burnin_steps]
+    ci_highs = [step.get('ci_high', 1.0) for step in burnin_steps]
+    is_inconclusive_list = [step.get('is_inconclusive', False) for step in burnin_steps]
     
     # Load thresholds from config file
     min_threshold, max_threshold = load_config_thresholds(config_file)
+    # Convert thresholds to percentage if validity rates were converted
+    if validity_rates_raw and max(validity_rates_raw) <= 1.0:
+        min_threshold = min_threshold * 100.0
+        max_threshold = max_threshold * 100.0
     
-    # Create figure with two subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
-    fig.suptitle('Burn-In Phase: Convergence Analysis (Bisection Search)', 
-                 fontsize=16, fontweight='bold')
+    # Create separate figure for graph with constrained layout to prevent clipping
+    # Make it much bigger for readability without zooming
+    fig1, ax1 = plt.subplots(1, 1, figsize=(20, 10), constrained_layout=True)
+    # No title - removed as requested
     
-    # Top plot: Validity rate and radius evolution
+    # Plot: Validity rate and radius evolution
     ax1_twin = ax1.twinx()
+    
     line1 = ax1.plot(step_nums, validity_rates, 'o-', color='blue', linewidth=2, 
                      markersize=10, label='Validity Rate', zorder=3)
     line2 = ax1_twin.plot(step_nums, radii, 's--', color='red', linewidth=2, 
                           markersize=10, label='Radius', zorder=3)
     
-    # Threshold lines
+    # Threshold lines (now in percentage)
     ax1.axhline(y=min_threshold, color='red', linestyle='--', linewidth=1.5, 
-                alpha=0.7, label=f'Min Threshold ({min_threshold})', zorder=1)
+                alpha=0.7, label=f'Min Threshold ({min_threshold:.1f}%)', zorder=1)
     ax1.axhline(y=max_threshold, color='green', linestyle='--', linewidth=1.5, 
-                alpha=0.7, label=f'Max Threshold ({max_threshold})', zorder=1)
+                alpha=0.7, label=f'Max Threshold ({max_threshold:.1f}%)', zorder=1)
     ax1.axhspan(min_threshold, max_threshold, alpha=0.1, color='green', 
                 label='Target Range', zorder=0)
     
-    # Annotate each step
-    for i, step in enumerate(burnin_steps):
-        x = step['step_num']
-        y = step['validity_rate']
-        r = step['radius']
-        step_type = step['step_type']
-        
-        # Determine annotation based on step type and validity
-        if step.get('is_final', False):
-            arrow_style = '✓'
-            color = 'green'
-            text = f'Step {x}\nValidity: {y:.3f}\nRadius: {r:.6f}\n{arrow_style} ACCEPT'
-        elif y < min_threshold:
-            arrow_style = '↓'
-            color = 'red'
-            text = f'Step {x}\nValidity: {y:.3f}\nRadius: {r:.6f}\n{arrow_style} Reduce'
-        elif y > max_threshold:
-            arrow_style = '↑'
-            color = 'orange'
-            text = f'Step {x}\nValidity: {y:.3f}\nRadius: {r:.6f}\n{arrow_style} Increase'
-        else:
-            arrow_style = '→'
-            color = 'blue'
-            text = f'Step {x}\nValidity: {y:.3f}\nRadius: {r:.6f}'
-        
-        # Only annotate every few steps to avoid clutter
-        if i % max(1, len(burnin_steps) // 8) == 0 or step.get('is_final', False):
-            ax1.annotate(text, xy=(x, y), xytext=(x + 0.3, y + 0.1),
-                        bbox=dict(boxstyle='round,pad=0.5', facecolor=color, alpha=0.3),
-                        arrowprops=dict(arrowstyle='->', color=color, lw=1.5),
-                        fontsize=9, zorder=4)
+    # Remove all step info boxes/annotations as requested
     
-    ax1.set_xlabel('Burn-In Step Number', fontsize=12, fontweight='bold')
-    ax1.set_ylabel('Validity Rate', fontsize=12, color='blue', fontweight='bold')
-    ax1_twin.set_ylabel('Radius Value', fontsize=12, color='red', fontweight='bold')
-    ax1.set_title('Validity Rate and Radius Evolution (Bisection Search)', 
-                  fontweight='bold', fontsize=14)
-    ax1.set_ylim(0, max(1.0, max(validity_rates) * 1.1))
+    # Set axis labels with much larger font sizes for readability without zooming
+    ax1.set_xlabel('Iteration Number', fontsize=24, color='black')
+    ax1.set_ylabel('Validity Rate (%)', fontsize=24, color='black')
+    # Ensure secondary y-axis label is clearly visible on the right - also black
+    ax1_twin.set_ylabel('Radius Value', fontsize=24, color='black', 
+                        rotation=270, labelpad=30)
+    # No title - removed as requested
+    # Set y-axis limits with proper padding for percentage values
+    max_validity = max(validity_rates) if validity_rates else 100.0
+    ax1.set_ylim(0, max(100.0, max_validity * 1.1))
     if radii:
         ax1_twin.set_ylim(0, max(radii) * 1.2)
-    ax1.grid(True, alpha=0.3, zorder=0)
+    ax1.grid(True, linestyle='--', alpha=0.3, linewidth=0.5, zorder=0)
+    # Set tick labels to serif font with much larger font size
+    ax1.tick_params(axis='both', which='major', labelsize=20)
+    ax1_twin.tick_params(axis='y', which='major', labelsize=20)
+    # Set serif font for tick labels (numbers) - use DejaVu Serif as it's commonly available
+    # This provides a serif font similar to Times New Roman
+    import matplotlib.font_manager as fm
+    # Try to find a serif font (prefer DejaVu Serif, Times, or any serif)
+    serif_font = None
+    for font_name in ['DejaVu Serif', 'Times', 'Times New Roman', 'Liberation Serif']:
+        try:
+            if font_name in [f.name for f in fm.fontManager.ttflist]:
+                serif_font = font_name
+                break
+        except:
+            pass
     
-    # Combine legends
-    lines = line1 + line2
-    labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='upper left')
-    ax1.legend([plt.Line2D([0], [0], color='red', linestyle='--'), 
-                plt.Line2D([0], [0], color='green', linestyle='--')],
-               [f'Min Threshold ({min_threshold})', f'Max Threshold ({max_threshold})'], 
-               loc='upper right')
+    # If no specific serif found, just use serif family (will pick default)
+    for label in ax1.get_xticklabels() + ax1.get_yticklabels():
+        label.set_fontfamily('serif')
+        if serif_font:
+            try:
+                label.set_fontname(serif_font)
+            except:
+                pass
+    for label in ax1_twin.get_yticklabels():
+        label.set_fontfamily('serif')
+        if serif_font:
+            try:
+                label.set_fontname(serif_font)
+            except:
+                pass
     
-    # Bottom plot: Convergence table
+    # Combine all legends properly to avoid overlap - matching right plot style
+    # Get all lines and labels
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax1_twin.get_legend_handles_labels()
+    
+    # Combine data lines (from both axes)
+    all_lines = line1 + line2
+    all_labels = [l.get_label() for l in all_lines]
+    
+    # Add threshold lines
+    threshold_lines = [
+        plt.Line2D([0], [0], color='red', linestyle='--', linewidth=1.5),
+        plt.Line2D([0], [0], color='green', linestyle='--', linewidth=1.5)
+    ]
+    threshold_labels = [
+        f'Min Threshold ({min_threshold:.1f}%)', 
+        f'Max Threshold ({max_threshold:.1f}%)'
+    ]
+    
+    # Place main legend outside plot area on the left with larger font
+    legend1 = ax1.legend(all_lines, all_labels, loc='upper left', 
+                        bbox_to_anchor=(0.0, 1.0), framealpha=0.9, fontsize=18)
+    # Place threshold legend outside plot area on the right with larger font
+    legend2 = ax1.legend(threshold_lines, threshold_labels, loc='upper right',
+                        bbox_to_anchor=(1.0, 1.0), framealpha=0.9, fontsize=18)
+    # Add first legend back (matplotlib only keeps the last one)
+    ax1.add_artist(legend1)
+    
+    # Save graph separately with DPI 300 (matching right plot)
+    if output_file:
+        graph_file = output_file.replace('.pdf', '_convergence_graph.pdf').replace('.png', '_convergence_graph.pdf')
+        plt.savefig(graph_file, dpi=300, bbox_inches='tight')
+        print(f"Convergence graph saved to: {graph_file}")
+        if graph_file.endswith('.pdf'):
+            graph_png = graph_file.replace('.pdf', '.png')
+            plt.savefig(graph_png, dpi=300, bbox_inches='tight')
+            print(f"Convergence graph (PNG) saved to: {graph_png}")
+    
+    plt.close(fig1)
+    
+    # Create separate figure for table
+    fig2, ax2 = plt.subplots(1, 1, figsize=(14, max(8, len(burnin_steps) * 0.3)))
     ax2.axis('off')
     table_data = []
-    headers = ['Step', 'Radius', 'Valid', 'Total', 'Validity Rate', 'Type', 'Decision']
+    headers = ['Step', 'Radius', 'Valid', 'Total', 'Validity', 'Decision', 'Action']
     for step in burnin_steps:
-        # Format decision based on step type and decision field
-        step_type = step['step_type']
-        decision_field = step.get('decision', None)
+        # Format decision based on grow/shrink approach
+        decision_field = step.get('decision', '')
         
         if step.get('is_final', False):
             decision = 'ACCEPT'
-        elif step_type == 'initial_lower':
-            decision = 'INITIAL_LOWER'
-        elif step_type == 'initial_upper':
-            decision = 'INITIAL_UPPER'
-        elif step_type == 'bisection':
-            # Use the actual decision direction
-            if decision_field == 'left':
-                decision = '↓ REDUCE (left)'
-            elif decision_field == 'right':
-                decision = '↑ INCREASE (right)'
-            elif decision_field == 'accept':
-                decision = '✓ ACCEPT'
-            else:
-                # Fallback: determine from validity rate
-                if step['validity_rate'] < min_threshold:
-                    decision = '↓ REDUCE (left)'
-                elif step['validity_rate'] > max_threshold:
-                    decision = '↑ INCREASE (right)'
-                else:
-                    decision = '→ IN RANGE'
+            action = '[OK] Final'
+        elif decision_field == 'shrink':
+            decision = 'SHRINK'
+            action = '↓ Reduce Radius'
+        elif decision_field == 'grow':
+            decision = 'GROW'
+            action = '↑ Increase Radius'
+        elif decision_field == 'accept':
+            decision = 'IN RANGE'
+            action = '→ Continue'
         else:
-            decision = step_type.upper()
+            # Fallback: determine from validity rate
+            if step['validity_rate'] < min_threshold:
+                decision = 'SHRINK'
+                action = '↓ Reduce Radius'
+            elif step['validity_rate'] > max_threshold:
+                decision = 'GROW'
+                action = '↑ Increase Radius'
+            else:
+                decision = 'IN RANGE'
+                action = '→ Continue'
         
         table_data.append([
             step['step_num'],
@@ -448,52 +515,28 @@ def plot_convergence_evolution(burnin_steps, output_file=None, config_file=None)
             step['valid_count'],
             step['total_count'],
             f"{step['validity_rate']:.3f}",
-            step['step_type'],
-            decision
+            decision,
+            action
         ])
     
     table = ax2.table(cellText=table_data, colLabels=headers, 
                      cellLoc='center', loc='center',
-                     colWidths=[0.08, 0.18, 0.1, 0.1, 0.15, 0.15, 0.15])
+                     colWidths=[0.08, 0.15, 0.08, 0.08, 0.10, 0.12, 0.20])
     table.auto_set_font_size(False)
     table.set_fontsize(9)
     table.scale(1, 1.8)
     
-    # Color code rows with gradient based on step number
+    # Color code rows based on decision type
     for i, step in enumerate(burnin_steps):
+        decision = step.get('decision', '')
         if step.get('is_final', False):
-            color = 'lightgreen'
-        elif step['validity_rate'] < min_threshold:
-            color = 'lightcoral'  # Red for too low validity
-        elif step['validity_rate'] > max_threshold:
-            color = 'lightyellow'  # Yellow for too high validity
+            color = 'lightgreen'  # Green for final accepted step
+        elif decision == 'shrink' or step['validity_rate'] < min_threshold:
+            color = 'lightcoral'  # Red for shrink (validity too low)
+        elif decision == 'grow' or step['validity_rate'] > max_threshold:
+            color = 'wheat'  # Light orange for grow (validity too high)
         else:
-            # Use orange gradient for bisection steps
-            step_type = step.get('step_type', 'bisection')
-            if step_type == 'bisection':
-                bisection_steps = [s for s in burnin_steps if s.get('step_type') == 'bisection']
-                if bisection_steps:
-                    bisection_indices = [j for j, s in enumerate(burnin_steps) if s.get('step_type') == 'bisection']
-                    if i in bisection_indices:
-                        bisection_pos = bisection_indices.index(i)
-                        gradient_pos = bisection_pos / (len(bisection_steps) - 1) if len(bisection_steps) > 1 else 0.0
-                    else:
-                        gradient_pos = 0.0
-                    # Interpolate between light orange and dark orange
-                    color = plt.cm.Oranges(0.3 + 0.6 * gradient_pos)
-                else:
-                    color = plt.cm.Oranges(0.5)  # Default orange
-            elif step_type == 'initial_lower':
-                color = 'mistyrose'  # Light red
-            elif step_type == 'initial_upper':
-                color = 'lavender'  # Light purple
-            else:
-                # Fallback: orange gradient
-                if len(burnin_steps) > 1:
-                    gradient_pos = i / (len(burnin_steps) - 1)
-                else:
-                    gradient_pos = 0.0
-                color = plt.cm.Oranges(0.3 + 0.6 * gradient_pos)
+            color = 'lightblue'  # Blue for in range
         for j in range(len(headers)):
             table[(i+1, j)].set_facecolor(color)
     
@@ -504,19 +547,17 @@ def plot_convergence_evolution(burnin_steps, output_file=None, config_file=None)
     
     plt.tight_layout()
     
+    # Save table separately
     if output_file:
-        conv_file = output_file.replace('.pdf', '_convergence.pdf').replace('.png', '_convergence.png')
-        plt.savefig(conv_file, dpi=300, bbox_inches='tight')
-        print(f"Convergence plot saved to: {conv_file}")
-        # Also save as PNG
-        if conv_file.endswith('.pdf'):
-            png_file = conv_file.replace('.pdf', '.png')
-            plt.savefig(png_file, dpi=300, bbox_inches='tight')
-            print(f"Convergence plot (PNG) saved to: {png_file}")
-    else:
-        plt.show()
+        table_file = output_file.replace('.pdf', '_convergence_table.pdf').replace('.png', '_convergence_table.pdf')
+        plt.savefig(table_file, dpi=300, bbox_inches='tight')
+        print(f"Convergence table saved to: {table_file}")
+        if table_file.endswith('.pdf'):
+            table_png = table_file.replace('.pdf', '.png')
+            plt.savefig(table_png, dpi=300, bbox_inches='tight')
+            print(f"Convergence table (PNG) saved to: {table_png}")
     
-    plt.close()
+    plt.close(fig2)
     return True
 
 
@@ -801,43 +842,12 @@ def visualize_burnin_phase(samples_file, grid_file=None, output_file=None, confi
     legend_elements.append(plt.Line2D([0], [0], marker='o', color='k', 
                                      markersize=8, label='Start position'))
     
-    # Move legend outside the plot area (top-right)
-    legend = ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(1.02, 1), 
-                       framealpha=0.9, borderaxespad=0)
-    
-    # Add text box with burn-in statistics (below the legend, outside plot)
-    final_step = burnin_steps[-1] if burnin_steps else None
-    stats_text = "Burn-In Statistics:\n"
-    stats_text += f"Total Steps: {len(burnin_steps)}\n"
-    if final_step:
-        stats_text += f"Final Radius: {final_step['radius']:.4f}\n"
-        stats_text += f"Final Validity Rate: {final_step['validity_rate']:.2%}\n"
-        stats_text += f"Final Valid Samples: {final_step['valid_count']}/{final_step['total_count']}\n"
-    
-    # Count bisection steps
-    bisection_count = sum(1 for s in burnin_steps if s['step_type'] == 'bisection')
-    initial_lower_count = sum(1 for s in burnin_steps if s['step_type'] == 'initial_lower')
-    initial_upper_count = sum(1 for s in burnin_steps if s['step_type'] == 'initial_upper')
-    initial_count = initial_lower_count + initial_upper_count
-    stats_text += f"Initial Lower: {initial_lower_count}, Initial Upper: {initial_upper_count}, Bisection: {bisection_count}"
-    
-    # Get legend position to place stats box below it
-    legend_bbox = legend.get_window_extent(fig.canvas.get_renderer())
-    legend_bbox_fig = legend_bbox.transformed(fig.transFigure.inverted())
-    
-    # Place stats box below legend, aligned to left edge
-    stats_y = legend_bbox_fig.y0 - 0.15  # Below legend with some spacing
-    stats_x = legend_bbox_fig.x0  # Aligned with legend left edge
-    
-    fig.text(stats_x, stats_y, stats_text, transform=fig.transFigure,
-             fontsize=9, verticalalignment='top', horizontalalignment='left',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
-             family='monospace')
+    # Don't add legend to main plot - will be saved separately
     
     # Grid
     ax.grid(True, alpha=0.3, linestyle='--')
     
-    # Save figure
+    # Save figure (without legend and stats)
     if output_file:
         plt.savefig(output_file, dpi=300, bbox_inches='tight')
         print(f"Burn-in visualization saved to: {output_file}")
@@ -847,6 +857,56 @@ def visualize_burnin_phase(samples_file, grid_file=None, output_file=None, confi
         if png_file != output_file:
             plt.savefig(png_file, dpi=300, bbox_inches='tight')
             print(f"Burn-in visualization (PNG) saved to: {png_file}")
+        
+        # Save legend separately
+        if legend_elements:
+            # Calculate figure height based on number of legend elements
+            num_elements = len(legend_elements)
+            fig_height = max(3, num_elements * 0.4)  # Dynamic height based on elements
+            legend_fig, legend_ax = plt.subplots(figsize=(3.5, fig_height))
+            legend_ax.axis('off')
+            legend = legend_ax.legend(handles=legend_elements, loc='center', framealpha=0.95, 
+                           fancybox=True, shadow=True, fontsize=11, ncol=1,
+                           borderpad=0.5, columnspacing=0.5)
+            legend_file = output_file.replace('.pdf', '_legend.pdf').replace('.png', '_legend.pdf')
+            legend_fig.tight_layout(pad=0.0)
+            legend_fig.savefig(legend_file, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.0)
+            legend_png = legend_file.replace('.pdf', '.png')
+            legend_fig.savefig(legend_png, format='png', bbox_inches='tight', dpi=300, pad_inches=0.0)
+            plt.close(legend_fig)
+            print(f"Legend saved to: {legend_file}")
+            print(f"Legend saved to: {legend_png}")
+        
+        # Save stats box separately
+        final_step = burnin_steps[-1] if burnin_steps else None
+        stats_text = "Burn-In Statistics:\n"
+        stats_text += f"Total Steps: {len(burnin_steps)}\n"
+        if final_step:
+            stats_text += f"Final Radius: {final_step['radius']:.4f}\n"
+            stats_text += f"Final Validity Rate: {final_step['validity_rate']:.2%}\n"
+            stats_text += f"Final Valid Samples: {final_step['valid_count']}/{final_step['total_count']}\n"
+        
+        # Count bisection steps
+        bisection_count = sum(1 for s in burnin_steps if s['step_type'] == 'bisection')
+        initial_lower_count = sum(1 for s in burnin_steps if s['step_type'] == 'initial_lower')
+        initial_upper_count = sum(1 for s in burnin_steps if s['step_type'] == 'initial_upper')
+        initial_count = initial_lower_count + initial_upper_count
+        stats_text += f"Initial Lower: {initial_lower_count}, Initial Upper: {initial_upper_count}, Bisection: {bisection_count}"
+        
+        stats_fig, stats_ax = plt.subplots(figsize=(5, 3))
+        stats_ax.axis('off')
+        stats_ax.text(0.1, 0.5, stats_text, transform=stats_ax.transAxes,
+                     fontsize=11, verticalalignment='center', horizontalalignment='left',
+                     bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+                     family='monospace')
+        stats_file = output_file.replace('.pdf', '_stats.pdf').replace('.png', '_stats.pdf')
+        stats_fig.tight_layout(pad=0.1)
+        stats_fig.savefig(stats_file, format='pdf', bbox_inches='tight', dpi=300, pad_inches=0.05)
+        stats_png = stats_file.replace('.pdf', '.png')
+        stats_fig.savefig(stats_png, format='png', bbox_inches='tight', dpi=300, pad_inches=0.05)
+        plt.close(stats_fig)
+        print(f"Stats box saved to: {stats_file}")
+        print(f"Stats box saved to: {stats_png}")
     else:
         plt.show()
     
