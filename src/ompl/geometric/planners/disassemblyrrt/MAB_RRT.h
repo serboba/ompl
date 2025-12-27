@@ -35,14 +35,14 @@
 /* Author: Servet Bora Bayraktar */
 
 /**
- * @file MAB_SSRRT.h
- * @brief Multi-Armed Bandit Sphere-Sampled RRT
+ * @file MAB_RRT.h
+ * @brief Multi-Armed Bandit RRT
  * 
  * =============================================================================
  * ALGORITHM OVERVIEW
  * =============================================================================
  * 
- * MAB-SSRRT is an RRT-based motion planner that uses Multi-Armed Bandit (MAB)
+ * MAB-RRT is an RRT-based motion planner that uses Multi-Armed Bandit (MAB)
  * reinforcement learning to adaptively select between different sampling strategies.
  * 
  * The planner uses a FLAT 3-arm MAB:
@@ -58,8 +58,8 @@
  * 
  * 1. ADAPTIVE SPHERE SAMPLING:
  *    During burn-in, the planner discovers constraint directions by probing
- *    samples at varying radii. Valid samples are collected to seed the 
- *    cylinder sampler with known free-motion directions.
+ *    samples at varying radii using bisection search with Wilson CI. Valid samples 
+ *    are collected to seed the cylinder sampler with known free-motion directions.
  * 
  * 2. CYLINDER SAMPLING:
  *    Uses PCA on valid samples to identify the principal axis of motion.
@@ -76,7 +76,7 @@
  * =============================================================================
  * 
  * @code
- * auto planner = std::make_shared<og::MAB_SSRRT>(si, "/path/to/config.yaml");
+ * auto planner = std::make_shared<og::MAB_RRT>(si, "/path/to/config.yaml");
  * planner->setProblemDefinition(pdef);
  * planner->setup();
  * auto status = planner->solve(timeout);
@@ -85,8 +85,8 @@
  * =============================================================================
  */
 
-#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_
-#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_
+#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_RRT_
+#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_RRT_
 
 #include "ompl/datastructures/NearestNeighbors.h"
 #include "ompl/geometric/planners/PlannerIncludes.h"
@@ -100,11 +100,11 @@ namespace ompl {
     namespace geometric {
 
         /**
-         * @class MAB_SSRRT
-         * @brief Multi-Armed Bandit Sphere-Sampled RRT
+         * @class MAB_RRT
+         * @brief Multi-Armed Bandit RRT
          * 
          * This planner extends RRT with:
-         * - Adaptive sphere sampling for constraint discovery
+         * - Adaptive sphere sampling for constraint discovery (using gradient-like log-space updates)
          * - Cylinder sampling along principal constraint axis
          * - MAB for arm selection (3 arms: UNIFORM, CYL_UP, CYL_DOWN)
          * 
@@ -113,12 +113,12 @@ namespace ompl {
          * - Narrow passage problems with known constraint structure
          * - Environments where directed exploration outperforms uniform
          */
-        class MAB_SSRRT : public base::Planner {
+        class MAB_RRT : public base::Planner {
         public:
             /** @brief Constructor with YAML configuration file path */
-            MAB_SSRRT(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
+            MAB_RRT(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
 
-            ~MAB_SSRRT() override;
+            ~MAB_RRT() override;
 
             void getPlannerData(base::PlannerData &data) const override;
 
@@ -252,6 +252,7 @@ namespace ompl {
                     : sphere(std::move(s)), axesIndices(std::move(axes)) {}
             };
 
+
             // ====================================================================
             // INITIALIZATION & CLEANUP
             // ====================================================================
@@ -286,7 +287,7 @@ namespace ompl {
             /** @brief Test if uniform sampling is sufficient (early exit) */
             bool performInitialUniformCheck();
             
-            /** @brief Iteratively adjust radius to find optimal sampling sphere */
+            /** @brief Iteratively adjusts sampling radius using gradient-like log-space updates */
             void performAdaptiveBurnin();
             
             /** @brief Check for early exit on consecutive full validity */
@@ -296,15 +297,18 @@ namespace ompl {
             /** @brief Check if validity rate is in acceptable range */
             bool isValidityRateInTargetRange(double validity_rate) const;
             
-            /** @brief Shrink or grow radius based on validity feedback */
-            double adjustRadiusBasedOnValidity(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
-                                              double current_radius, double validity_rate);
-            
             /** @brief Finalize burn-in and set best radius */
             void finalizeBurnin(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere, double final_radius);
             
             /** @brief Compute sample validity rate at current radius */
             double computeValidityRate();
+            
+            /** @brief Adjust radius based on validity using gradient-like log-space updates */
+            double adjustRadiusBasedOnValidity(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
+                                              double current_radius, double validity_rate);
+            
+            /** @brief Compute maximum allowed burn-in radius based on state space bounds */
+            double computeMaxBurninRadius() const;
 
             // ====================================================================
             // SAMPLING METHODS
@@ -327,12 +331,12 @@ namespace ompl {
             /** @brief Generate sample and validate motion */
             template <typename ValidateFunc>
             bool generateAndValidateSample(base::State* sample_state, ValidateFunc& validateState,
-                                          double radius, MABPath& selectedMABPath);
+                                          double extensionHeight, MABPath& selectedMABPath);
             
             /** @brief Sample from cylinder (direction already selected) */
             template <typename ValidateFunc>
             bool sampleFromCylinder(base::State* sample_state, ValidateFunc& validateState,
-                                   double radius, MABPath& selectedMABPath);
+                                   double extensionHeight, MABPath& selectedMABPath);
             
             /** @brief Fallback to uniform if cylinder fails */
             template <typename ValidateFunc>
@@ -340,8 +344,7 @@ namespace ompl {
                                   MABPath& selectedMABPath);
                                   
             /** @brief Update MAB rewards and statistics */
-            void updateSamplingStatistics(MABPath selectedMABPath, bool isSampleValid,
-                                         base::State* sample_state, base::State* originState);
+            void updateSamplingStatistics(MABPath selectedMABPath, bool isSampleValid);
             
             /** @brief Sample uniformly across all dimensions */
             void sampleUniformHypothesis(base::State *state);
@@ -411,19 +414,23 @@ namespace ompl {
             
             // Adaptive sampling parameters
             int adaptiveQuasirandomSampleSize_{128};
-            double adaptiveStartRadius_{0.5};
-            double adaptiveMinRadius_{0.01};
-            double adaptiveShrinkStep_{0.1};
-            double adaptiveGrowStep_{0.1};
             double adaptiveMinExpectedValidityRate_{0.3};
             double adaptiveMaxExpectedValidityRate_{0.7};
             int adaptiveBurninMaxSteps_{10};
+            
+            // Grow/shrink parameters
+            double adaptiveStartRadius_{0.1};
+            double adaptiveMinRadius_{0.0001};
+            double adaptiveMaxRadius_{std::numeric_limits<double>::infinity()};  // Upper bound from state space bounds
+            double adaptiveShrinkStep_{0.1};  // Shrink step for radius adjustment
+            double adaptiveGrowStep_{0.1};    // Grow step for radius adjustment
 
             // Initial uniform check
             double initialFreeSamplingProbability_{0.5};
             int initialNumberOfUniformSampleTrials_{10};
 
             double sphereExtensionEps_{0.0};
+            double burninFinalRadius_{0.0};  // Store burn-in radius for fixed extension height
             
             // MAB rewards
             double uniformSamplerInvalidReward_{0.0};

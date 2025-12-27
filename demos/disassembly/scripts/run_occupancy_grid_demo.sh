@@ -179,11 +179,22 @@ OUTPUT_FILE="${OUTPUTS_DIR}/visualizations/${GRID_NAME}_visualization.pdf"
 
 # Find and move/rename output files to output directory with grid name
 # The C++ code may output to different locations:
-# - Debug mode: build directory (bugtrap_path.csv, bugtrap_samples_debug.csv)
-# - Non-debug mode: grid file directory (bugtrap_path.csv)
-# - Debug planner: build directory (bugtrap_path.csv, bugtrap_samples_debug.csv)
+# - Debug mode: outputs/paths/ and outputs/samples/ (bugtrap_path.csv, bugtrap_samples_debug.csv)
+# - Build directory: bugtrap_path.csv, bugtrap_samples_debug.csv
+# - Grid file directory: bugtrap_path.csv
+# - Output directory: bugtrap_path.csv, bugtrap_samples_debug.csv
 
-# Check build directory first (for debug mode)
+# Create output directories if they don't exist
+mkdir -p "${OUTPUTS_DIR}/paths"
+mkdir -p "${OUTPUTS_DIR}/samples"
+mkdir -p "${OUTPUTS_DIR}/visualizations"
+mkdir -p "${OUTPUTS_DIR}/burnin_visualizations"
+
+# Check outputs directory first (where C++ code now writes directly)
+OUTPUTS_PATH_FILE="${OUTPUTS_DIR}/paths/bugtrap_path.csv"
+OUTPUTS_SAMPLES_FILE="${OUTPUTS_DIR}/samples/bugtrap_samples_debug.csv"
+
+# Check build directory (for older behavior)
 BUILD_PATH_FILE="${BUILD_DIR}/bugtrap_path.csv"
 BUILD_SAMPLES_FILE="${BUILD_DIR}/bugtrap_samples_debug.csv"
 
@@ -195,14 +206,12 @@ GRID_DIR_PATH_FILE="${GRID_DIR}/bugtrap_path.csv"
 OUTPUT_PATH_FILE="${OUTPUT_DIR}/bugtrap_path.csv"
 OUTPUT_SAMPLES_FILE="${OUTPUT_DIR}/bugtrap_samples_debug.csv"
 
-# Create output directories if they don't exist
-mkdir -p "${OUTPUTS_DIR}/paths"
-mkdir -p "${OUTPUTS_DIR}/samples"
-mkdir -p "${OUTPUTS_DIR}/visualizations"
-mkdir -p "${OUTPUTS_DIR}/burnin_visualizations"
-
-# Find and move path file
-if [ -f "$BUILD_PATH_FILE" ]; then
+# Find and move/rename path file
+if [ -f "$OUTPUTS_PATH_FILE" ]; then
+    # File is already in outputs/paths/, just rename it
+    mv "$OUTPUTS_PATH_FILE" "$PATH_FILE"
+    echo "[INFO] Path file saved as: ${PATH_FILE}"
+elif [ -f "$BUILD_PATH_FILE" ]; then
     mv "$BUILD_PATH_FILE" "$PATH_FILE"
     echo "[INFO] Path file saved as: ${PATH_FILE}"
 elif [ -f "$GRID_DIR_PATH_FILE" ]; then
@@ -213,9 +222,13 @@ elif [ -f "$OUTPUT_PATH_FILE" ]; then
     echo "[INFO] Path file saved as: ${PATH_FILE}"
 fi
 
-# Find and move samples file (debug mode only)
+# Find and move/rename samples file (debug mode only)
 if [ "$DEBUG" = true ]; then
-    if [ -f "$BUILD_SAMPLES_FILE" ]; then
+    if [ -f "$OUTPUTS_SAMPLES_FILE" ]; then
+        # File is already in outputs/samples/, just rename it
+        mv "$OUTPUTS_SAMPLES_FILE" "$SAMPLES_FILE"
+        echo "[INFO] Samples file saved as: ${SAMPLES_FILE}"
+    elif [ -f "$BUILD_SAMPLES_FILE" ]; then
         mv "$BUILD_SAMPLES_FILE" "$SAMPLES_FILE"
         echo "[INFO] Samples file saved as: ${SAMPLES_FILE}"
     elif [ -f "$OUTPUT_SAMPLES_FILE" ]; then
@@ -238,10 +251,49 @@ if [ "$VISUALIZE" = true ]; then
         exit 1
     fi
     
-    # Run visualization (using bugtrap_path.csv for compatibility)
+    # Verify files exist and are fresh (created within last 5 minutes)
+    if [ ! -f "$PATH_FILE" ]; then
+        echo "ERROR: Path file not found: ${PATH_FILE}"
+        exit 1
+    fi
+    if [ "$DEBUG" = true ] && [ ! -f "$SAMPLES_FILE" ]; then
+        echo "ERROR: Samples file not found: ${SAMPLES_FILE}"
+        exit 1
+    fi
+    
+    # Get file timestamps for verification
+    PATH_FILE_TIME=$(stat -c "%Y" "$PATH_FILE" 2>/dev/null || echo "0")
+    SAMPLES_FILE_TIME=$(stat -c "%Y" "$SAMPLES_FILE" 2>/dev/null || echo "0")
+    CURRENT_TIME=$(date +%s)
+    MAX_AGE=300  # 5 minutes in seconds
+    
+    if [ $((CURRENT_TIME - PATH_FILE_TIME)) -gt $MAX_AGE ]; then
+        echo "WARNING: Path file is older than 5 minutes: ${PATH_FILE}"
+        echo "         Timestamp: $(stat -c "%y" "$PATH_FILE")"
+    fi
+    if [ "$DEBUG" = true ] && [ $((CURRENT_TIME - SAMPLES_FILE_TIME)) -gt $MAX_AGE ]; then
+        echo "WARNING: Samples file is older than 5 minutes: ${SAMPLES_FILE}"
+        echo "         Timestamp: $(stat -c "%y" "$SAMPLES_FILE")"
+    fi
+    
+    # Use absolute paths to ensure correct files are used
+    PATH_FILE_ABS=$(readlink -f "$PATH_FILE")
+    SAMPLES_FILE_ABS=$(readlink -f "$SAMPLES_FILE")
+    OUTPUT_FILE_ABS=$(readlink -f "$OUTPUT_FILE")
+    GRID_FILE_ABS=$(readlink -f "$GRID_FILE")
+    
+    echo "[VERIFY] Using files:"
+    echo "  Path: ${PATH_FILE_ABS} (modified: $(stat -c "%y" "$PATH_FILE"))"
+    if [ "$DEBUG" = true ]; then
+        echo "  Samples: ${SAMPLES_FILE_ABS} (modified: $(stat -c "%y" "$SAMPLES_FILE"))"
+    fi
+    echo "  Grid: ${GRID_FILE_ABS}"
+    echo "  Output: ${OUTPUT_FILE_ABS}"
+    
+    # Run visualization with absolute paths
     # The script will use the grid file if provided as 4th argument
     # Invalid samples are hidden by default (use --show-invalid to show them)
-    VIZ_CMD="python3 \"${VIZ_SCRIPT}\" \"${PATH_FILE}\" \"${OUTPUT_FILE}\" \"${SAMPLES_FILE}\" \"${GRID_FILE}\""
+    VIZ_CMD="python3 \"${VIZ_SCRIPT}\" \"${PATH_FILE_ABS}\" \"${OUTPUT_FILE_ABS}\" \"${SAMPLES_FILE_ABS}\" \"${GRID_FILE_ABS}\""
     if [ "$SHOW_INVALID" = true ]; then
         VIZ_CMD="${VIZ_CMD} --show-invalid"
     fi

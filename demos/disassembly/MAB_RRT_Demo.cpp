@@ -65,8 +65,8 @@
 #include <ompl/geometric/PathGeometric.h>
  
 // MAB-RRT planner
-#include <ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h>
-#include <ompl/geometric/planners/disassemblyrrt/MAB_SSRRT_DEBUG.h>
+#include <ompl/geometric/planners/disassemblyrrt/MAB_RRT.h>
+#include <ompl/geometric/planners/disassemblyrrt/MAB_RRT_DEBUG.h>
  
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
@@ -209,8 +209,11 @@ public:
         //     world(-H/2) → gridY = 0, world(+H/2) → gridY = H (clamped to H-1)
         //
         // With gridOffsetX = -W/2 and gridOffsetY = -H/2:
-        int gridX = static_cast<int>(std::floor((x - gridOffsetX_) / resolution_));
-        int gridY = static_cast<int>(std::floor((y - gridOffsetY_) / resolution_));
+        // Use floor() for proper cell mapping (cell [i] covers [i*res, (i+1)*res))
+        // Add small epsilon to handle boundary cases where coordinate is exactly at cell boundary
+        double epsilon = 1e-10;
+        int gridX = static_cast<int>(std::floor((x - gridOffsetX_ + epsilon) / resolution_));
+        int gridY = static_cast<int>(std::floor((y - gridOffsetY_ + epsilon) / resolution_));
 
         // Clamp to valid range
         if (gridX < 0) gridX = 0;
@@ -483,7 +486,7 @@ void runMAB_RRT_Demo(const std::string& configPath, double timeout = 10.0)
     pdef->setStartAndGoalStates(start, goal, 0.1);
 
     std::cout << "\n[INFO] Creating MAB-RRT planner..." << std::endl;
-    auto planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
+    auto planner = std::make_shared<og::MAB_RRT>(si, configPath);
     planner->setProblemDefinition(pdef);
     planner->setup();
 
@@ -554,14 +557,14 @@ void runBugTrapDemo(const std::string& configPath, double timeout = 10.0, bool d
     }
     std::cout << "[INFO] Config file: " << configPath << std::endl;
     
-    std::shared_ptr<og::MAB_SSRRT> planner;
-    std::shared_ptr<og::MAB_SSRRT_DEBUG> debugPlanner;
+    std::shared_ptr<og::MAB_RRT> planner;
+    std::shared_ptr<og::MAB_RRT_DEBUG> debugPlanner;
     
     if (debug) {
-        debugPlanner = std::make_shared<og::MAB_SSRRT_DEBUG>(si, configPath);
-        planner = debugPlanner;  // MAB_SSRRT_DEBUG inherits from MAB_SSRRT (note: class names not yet renamed)
+        debugPlanner = std::make_shared<og::MAB_RRT_DEBUG>(si, configPath);
+        planner = debugPlanner;  // MAB_RRT_DEBUG inherits from MAB_RRT (note: class names not yet renamed)
     } else {
-        planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
+        planner = std::make_shared<og::MAB_RRT>(si, configPath);
     }
     
     planner->setProblemDefinition(pdef);
@@ -720,7 +723,9 @@ void runOccupancyGridDemo(const std::string& configPath,
     auto checker = std::make_shared<OccupancyGridValidityChecker>(si, gridFile, 1.0, true);
     si->setStateValidityChecker(checker);
     // Use a very fine resolution to check paths - check every 0.01 units along edges
-    si->setStateValidityCheckingResolution(0.01);
+    // For large grids (100x100), use even finer resolution to ensure all cells are checked
+    // Resolution should be at least 10x smaller than grid cell size (1.0 / 10 = 0.1, but use 0.01 for safety)
+    si->setStateValidityCheckingResolution(0.005); // Finer resolution for large grids
     si->setup();
 
     auto pdef = std::make_shared<ob::ProblemDefinition>(si);
@@ -748,14 +753,17 @@ void runOccupancyGridDemo(const std::string& configPath,
     }
     std::cout << "[INFO] Config file: " << configPath << std::endl;
     
-    std::shared_ptr<og::MAB_SSRRT> planner;
-    std::shared_ptr<og::MAB_SSRRT_DEBUG> debugPlanner;
+    std::shared_ptr<og::MAB_RRT> planner;
+    std::shared_ptr<og::MAB_RRT_DEBUG> debugPlanner;
     
     if (debug) {
-        debugPlanner = std::make_shared<og::MAB_SSRRT_DEBUG>(si, configPath);
+        std::cout << "[DEBUG] Creating MAB_RRT_DEBUG planner instance..." << std::endl;
+        debugPlanner = std::make_shared<og::MAB_RRT_DEBUG>(si, configPath);
         planner = debugPlanner;
+        std::cout << "[DEBUG] MAB_RRT_DEBUG planner created successfully" << std::endl;
     } else {
-        planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
+        std::cout << "[INFO] Creating standard MAB_RRT planner (non-debug)" << std::endl;
+        planner = std::make_shared<og::MAB_RRT>(si, configPath);
     }
     
     planner->setProblemDefinition(pdef);

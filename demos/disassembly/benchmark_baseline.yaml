@@ -2,7 +2,7 @@
 # Configuration file for MAB-RRT (Multi-Armed Bandit RRT) planner
 
 # Goal Bias
-uniform_goal_bias : 0.01
+uniform_goal_bias : 0.1
 sphere_goal_bias : 0.0000001
 
 # MAB Parameters
@@ -19,19 +19,19 @@ mab_uniform_sphere_window_size : 256    # Sliding window size for MAB arm select
 forced_uniform_after_cylinder_valid_streak: 5
 
 # Adaptive Sphere Sampling Parameters
-adaptive_quasirandom_sample_size : 32
-# Bisection search parameters (replaces grow/shrink approach)
-adaptive_bisection_lower_radius : 0.000001
-adaptive_bisection_upper_radius : 10.0
-adaptive_bisection_tolerance : 0.0001  # Convergence tolerance for bisection
+# Adaptive Sphere Sampling Parameters
+adaptive_quasirandom_sample_size : 64
+adaptive_start_radius : 1.0
+adaptive_min_radius : 0.000001
+# Direct multipliers (no exp() applied)
+# To maintain same behavior as exp(-0.7) and exp(0.9):
+#   exp(-0.7) ≈ 0.496585 (shrinks by this factor)
+#   exp(0.9) ≈ 2.459603 (grows by this factor)
+adaptive_shrink_step : 0.496585
+adaptive_grow_step : 2.459603
 adaptive_min_expected_validity_rate : 0.10
 adaptive_max_expected_validity_rate: 0.50
-adaptive_burnin_max_steps: 50  # Max iterations for bisection search
-# Legacy parameters (kept for compatibility, not used with bisection)
-adaptive_start_radius : 0.1
-adaptive_min_radius : 0.00001
-adaptive_shrink_step : 0.05
-adaptive_grow_step : 0.9
+adaptive_burnin_max_steps: 50
 
 pca_filter_top_percent: 1.0  # Percentage of top PCA components to keep, default 1.0 to use all valid samples for online PCA recalibration
 
@@ -39,7 +39,7 @@ pca_filter_top_percent: 1.0  # Percentage of top PCA components to keep, default
 # Before starting adaptive sphere burn-in, try k uniform samples.
 # If validity rate > probability, skip adaptive sphere and use uniform only.
 initialFreeSamplingProbability: 0.20
-initialNumberOfUniformSampleTrials: 10
+initialNumberOfUniformSampleTrials: 0
 
 # Cylinder Sampling Configuration
 enableDynamicCylinderPCA: true # Enable dynamic recomputation of cylinder PCA axis
@@ -57,9 +57,15 @@ consecutiveFullValidityMaxIterations: 5
 
 # Sphere sampler values
 
-sphere_extension_eps : 0.3 # if sphere sample was walid std::exp(sphere_extension_eps)*currentBestRadius
-                            # to grow the cylinder and sphere as fas as possible 
-                            # also used for kappa maybe add another param for kappa
+# Extension factor for cylinder height extension (EXPONENTIAL GROWTH)
+# extensionHeight = bestRadius * (exp(sphere_extension_eps - 1.0) - 1.0)
+# This allows fast exponential growth even when bestRadius is very small (e.g., 0.001)
+# Examples:
+#   sphere_extension_eps = 1.0 → extensionHeight = 0 (no extension)
+#   sphere_extension_eps = 2.0 → extensionHeight = bestRadius * (exp(1.0) - 1.0) ≈ bestRadius * 1.718
+#   sphere_extension_eps = 3.0 → extensionHeight = bestRadius * (exp(2.0) - 1.0) ≈ bestRadius * 6.389
+#   sphere_extension_eps = 4.0 → extensionHeight = bestRadius * (exp(3.0) - 1.0) ≈ bestRadius * 19.085
+sphere_extension_eps : 2.0 # 1.0 = no extension, >1.0 = exponential growth via exp(value - 1.0)
 
 # MAB Reward System
 # Fixed reward parameters for MAB arm selection

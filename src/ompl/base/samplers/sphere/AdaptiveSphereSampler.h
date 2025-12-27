@@ -74,6 +74,8 @@ namespace ompl
             void setCylinderRadiusOffsetMultiplier(double val) { cylinderSampler_.setRadiusOffsetMultiplier(val); }
             void setFibonacciJitterRadius(double val) { fibSampler_.setJitterRadius(val); }
             void setPCAFilterTopPercent(double val) { pcaFilterTopPercent_ = val; }
+            void freezeCylinder() { cylinderFrozen_ = true; }  // Prevent cylinder refitting during planning
+            void setCylinderHeight(double height) { cylinderSampler_.setCylinderHeight(height); }
 
             void updateComponentCenter(int componentIndex);
             void appendFibonacciSamples(double customRadius = -1.0);
@@ -108,6 +110,7 @@ namespace ompl
             bool validPointsDirty_ = true;
             Eigen::Vector3d cylinderAxis_ = Eigen::Vector3d::UnitZ();
             bool hasCylinderAxis_ = false;
+            bool cylinderFrozen_ = false;  // If true, don't refit cylinder during planning
             
             /** @brief Project 3D sphere point to 2D circle (in-place modification) */
             void projectSphereToCircle(Point& p, double radius);

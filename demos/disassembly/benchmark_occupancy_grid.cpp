@@ -68,12 +68,12 @@
 #include <ompl/geometric/planners/rrt/RRT.h>
 
 // MAB-SSRRT planner
-#include <ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h>
+#include <ompl/geometric/planners/disassemblyrrt/MAB_RRT.h>
 
 namespace ob = ompl::base;
 namespace og = ompl::geometric;
 
-// Forward declaration - reuse OccupancyGridValidityChecker from MAB_SSRRT_Demo
+// Forward declaration - reuse OccupancyGridValidityChecker from MAB_RRT_Demo
 class OccupancyGridValidityChecker : public ob::StateValidityChecker
 {
 public:
@@ -301,7 +301,7 @@ BenchmarkResult runBenchmark(const std::string& plannerName,
     ob::PlannerPtr planner;
 
     if (plannerName == "MAB-SSRRT") {
-        planner = std::make_shared<og::MAB_SSRRT>(si, configPath);
+        planner = std::make_shared<og::MAB_RRT>(si, configPath);
     } else if (plannerName == "RRT" || plannerName == "RRT-Gaussian" || plannerName == "RRT-Bridge") {
         planner = std::make_shared<og::RRT>(si);
     } else {
@@ -387,7 +387,9 @@ void createEnvironmentForPlanner(const std::string& gridFile,
     // Create the checker
     auto checker = std::make_shared<OccupancyGridValidityChecker>(si, gridFile, 1.0, true);
     si->setStateValidityChecker(checker);
-    si->setStateValidityCheckingResolution(0.01);
+    // Use finer resolution for large grids (100x100) to ensure all cells are checked
+    // Resolution should be at least 10x smaller than grid cell size
+    si->setStateValidityCheckingResolution(0.005); // Finer resolution for large grids
     
     // Set sampler allocator based on planner type
     if (plannerName == "RRT-Gaussian") {

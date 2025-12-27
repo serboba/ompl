@@ -8,12 +8,16 @@ This script creates an academic-style visualization showing:
 - Start and goal positions
 """
 
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to prevent hanging
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import csv
 import sys
 import os
+import time
 
 # Set matplotlib style for academic publications
 try:
@@ -214,10 +218,13 @@ def load_samples(filename):
                 
                 radius = float(row.get('radius', '0'))
                 
+                # Get burnin_step if available
+                burnin_step = row.get('burnin_step', '-1')
+                
                 sample_info = {
                     'x': x, 'y': y, 'is_valid': is_valid,
                     'sampler': sampler, 'was_connected': was_connected, 'phase': phase,
-                    'radius': radius
+                    'radius': radius, 'burnin_step': burnin_step
                 }
                 samples_data.append(sample_info)
                 
@@ -309,45 +316,80 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
         draw_bug_trap(ax1)
         draw_bug_trap(ax2)
     
+    # Helper function - NO LONGER INVERTING Y coordinates
+    # CSV coordinates are already in world coordinates (center-based)
+    # The grid extent already handles the display orientation correctly
+    # Define this function outside the conditional block so it's always available
+    def invert_y_if_needed(y_coords):
+        """Return Y coordinates as-is (no inversion needed)"""
+        return y_coords
+    
     # Load and plot debug samples if available
     edges = []
     samples_data = []
     burnin_radii = set()
+    valid_x = None
+    valid_y = None
+    invalid_x = None
+    invalid_y = None
+    burnin_valid_x = []
+    burnin_valid_y = []
+    burnin_invalid_x = []
+    burnin_invalid_y = []
+    final_burnin_radius = None
+    
     if samples_file and os.path.exists(samples_file):
         valid_x, valid_y, invalid_x, invalid_y, burnin_valid_x, burnin_valid_y, \
         burnin_invalid_x, burnin_invalid_y, edges, samples_data, burnin_radii = load_samples(samples_file)
         
         # Draw burn-in radius circles on both plots
         if burnin_radii:
-            # Sort radii to find the exit radius (smallest/last radius)
-            sorted_radii = sorted(burnin_radii, reverse=True)  # Largest to smallest
-            exit_radius = sorted_radii[-1] if sorted_radii else None
+            # Find the final radius from the last burn-in step
+            # The radius from the last burn-in step is the actual final radius (bestRadius)
+            final_burnin_radius = None
+            max_burnin_step = -1
+            for sample in samples_data:
+                if sample.get('phase') == 'burnin':
+                    try:
+                        step_str = sample.get('burnin_step', '-1')
+                        if step_str and step_str != '-1':
+                            step = int(step_str)
+                            radius = float(sample.get('radius', 0))
+                            if step > max_burnin_step and radius > 0:
+                                max_burnin_step = step
+                                final_burnin_radius = radius
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Fallback: if we couldn't find by step, use the largest radius (last step typically has largest)
+            if final_burnin_radius is None:
+                sorted_radii = sorted(burnin_radii, reverse=True)  # Largest to smallest
+                final_burnin_radius = sorted_radii[0] if sorted_radii else None
+            
+            sorted_radii = sorted(burnin_radii, reverse=True)  # For drawing other circles
             
             # Start position (origin for burn-in circles)
             start_x, start_y = 0.0, 0.0
             
+            # Draw final radius first (so it's on top and visible)
             for ax in [ax1, ax2]:
+                # Draw final radius with orange color - visible but not blocking samples
+                if final_burnin_radius is not None:
+                    final_circle = plt.Circle((start_x, start_y), final_burnin_radius, 
+                                            fill=False, edgecolor='#FF6600', 
+                                            linewidth=2.5, alpha=0.7, zorder=9,
+                                            label='Final Burn-in Radius')
+                    ax.add_patch(final_circle)
+                
+                # Draw other radii as thin grey circles
                 for radius in sorted_radii:
-                    if radius == exit_radius:
-                        # Exit radius: thick, visible color
-                        circle = plt.Circle((start_x, start_y), radius, 
-                                          fill=False, color='#FF6600', 
-                                          linewidth=2.5, alpha=0.9, zorder=0)
-                    else:
-                        # Other radii: thin grey circles
+                    if radius != final_burnin_radius:
                         circle = plt.Circle((start_x, start_y), radius, 
                                           fill=False, color='#888888', 
                                           linewidth=0.8, alpha=0.5, zorder=0)
-                    ax.add_patch(circle)
+                        ax.add_patch(circle)
         
-        # Helper function - NO LONGER INVERTING Y coordinates
-        # CSV coordinates are already in world coordinates (center-based)
-        # The grid extent already handles the display orientation correctly
-        def invert_y_if_needed(y_coords):
-            """Return Y coordinates as-is (no inversion needed)"""
-            return y_coords
-        
-        # Plot 1: Main plot with tree edges and samples
+        # Plot 1: Main plot with tree edges only (no samples - samples go on right plot)
         if edges:
             # Draw RRT tree edges - all same color (light gray)
             # Invert Y coordinates for edges if using grid
@@ -356,36 +398,6 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                 y2_inv = invert_y_if_needed(edge['y2'])
                 ax1.plot([edge['x1'], edge['x2']], [y1_inv, y2_inv], 
                         '-', color='#888888', linewidth=0.8, alpha=0.4, zorder=1)
-        
-        if valid_x is not None:
-            # Plot burn-in samples first (so they're in the background)
-            # All burn-in samples use full opacity (1.0) with gray border
-            # Valid = green, Invalid = red
-            # Invert Y coordinates if using grid
-            burnin_alpha = 1.0
-            burnin_edge_color = '#808080'  # Gray border
-            burnin_size = 25  # Increased size
-            if burnin_valid_x:
-                burnin_valid_y_inv = invert_y_if_needed(burnin_valid_y)
-                ax1.scatter(burnin_valid_x, burnin_valid_y_inv, c='#2ecc71', s=burnin_size, alpha=burnin_alpha, 
-                          label='Burn-in Valid', zorder=1, edgecolors=burnin_edge_color, 
-                          linewidths=0.5, marker='o')
-            if show_invalid and burnin_invalid_x:
-                burnin_invalid_y_inv = invert_y_if_needed(burnin_invalid_y)
-                ax1.scatter(burnin_invalid_x, burnin_invalid_y_inv, c='#e74c3c', s=burnin_size, alpha=burnin_alpha,
-                          label='Burn-in Invalid', zorder=1, edgecolors=burnin_edge_color,
-                          linewidths=0.5, marker='o')
-            
-            # Plot planning phase valid samples in green
-            if valid_x:
-                valid_y_inv = invert_y_if_needed(valid_y)
-                ax1.scatter(valid_x, valid_y_inv, c='#2ecc71', s=15, alpha=0.7, 
-                          label='Valid Samples', zorder=3, edgecolors='none')
-            # Plot planning phase invalid samples in red (only if show_invalid is True)
-            if show_invalid and invalid_x:
-                invalid_y_inv = invert_y_if_needed(invalid_y)
-                ax1.scatter(invalid_x, invalid_y_inv, c='#e74c3c', s=15, alpha=0.6,
-                          label='Invalid Samples', zorder=2, edgecolors='none')
         
         # Plot 2: Secondary plot with sampler arm colors
         # Also draw edges on second plot (all same color)
@@ -399,32 +411,60 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                         '-', color='#888888', linewidth=0.8, alpha=0.4, zorder=1)
         
         if samples_data:
-            # Plot burn-in samples on second plot too (with appropriate colors)
+            # Plot burn-in samples on second plot (ax2 only)
             # All burn-in samples use full opacity (1.0) with gray border
             # Valid = green, Invalid = red
             burnin_alpha = 1.0
             burnin_edge_color = '#808080'  # Gray border
-            burnin_size = 18  # Increased size
+            burnin_size = 25  # Increased size for visibility
+            burnin_valid_x_list = []
+            burnin_valid_y_list = []
+            burnin_invalid_x_list = []
+            burnin_invalid_y_list = []
+            
             for sample in samples_data:
                 if sample.get('phase') == 'burnin':
                     x, y = sample['x'], sample['y']
                     # Invert Y coordinate if using grid
                     y_inv = invert_y_if_needed(y)
                     is_valid = sample['is_valid']
-                    sampler = sample['sampler']
                     
                     # Skip invalid burn-in samples if show_invalid is False
                     if not show_invalid and not is_valid:
                         continue
                     
-                    # Burn-in samples: green for valid, red for invalid
-                    face_color = '#2ecc71' if is_valid else '#e74c3c'
-                    
-                    ax2.scatter(x, y_inv, c=face_color, s=burnin_size, alpha=burnin_alpha, 
-                              edgecolors=burnin_edge_color, linewidths=0.5, zorder=2, marker='o')
+                    if is_valid:
+                        burnin_valid_x_list.append(x)
+                        burnin_valid_y_list.append(y_inv)
+                    else:
+                        burnin_invalid_x_list.append(x)
+                        burnin_invalid_y_list.append(y_inv)
             
-            # Plot planning phase samples
+            # Plot burn-in valid samples
+            if burnin_valid_x_list:
+                ax2.scatter(burnin_valid_x_list, burnin_valid_y_list, 
+                          c='#2ecc71', s=burnin_size, alpha=burnin_alpha, 
+                          edgecolors=burnin_edge_color, linewidths=0.5, zorder=4, marker='o',
+                          label='Burn-in Valid')
+            
+            # Plot burn-in invalid samples (if show_invalid is True)
+            if show_invalid and burnin_invalid_x_list:
+                ax2.scatter(burnin_invalid_x_list, burnin_invalid_y_list, 
+                          c='#e74c3c', s=burnin_size, alpha=burnin_alpha, 
+                          edgecolors=burnin_edge_color, linewidths=0.5, zorder=4, marker='o',
+                          label='Burn-in Invalid')
+            
+            # Plot planning phase samples on ax2
             # Simplified: single color per sample based on sampler + validity
+            planning_valid_uniform_x = []
+            planning_valid_uniform_y = []
+            planning_valid_cylinder_up_x = []
+            planning_valid_cylinder_up_y = []
+            planning_valid_cylinder_down_x = []
+            planning_valid_cylinder_down_y = []
+            planning_invalid_x = []
+            planning_invalid_y = []
+            
             for sample in samples_data:
                 # Skip burn-in samples (already plotted above)
                 if sample.get('phase') == 'burnin':
@@ -436,36 +476,53 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                 is_valid = sample['is_valid']
                 sampler = sample['sampler']
                 
-                # Determine color based on sampler + validity combination
                 # Skip invalid samples if show_invalid is False
                 if not is_valid:
                     if not show_invalid:
-                        continue  # Skip invalid samples
-                    # Invalid samples
-                    if sampler == 'uniform':
-                        color = '#FF0000'  # Red for invalid uniform
-                    elif sampler in ['cylinder_up', 'cylinder_down', 'cylinder']:
-                        color = '#FF6600'  # Orange for invalid cylinder
-                    else:
-                        color = '#FF0000'  # Default red
+                        continue
+                    planning_invalid_x.append(x)
+                    planning_invalid_y.append(y_inv)
                 else:
-                    # Valid samples
+                    # Valid samples - group by sampler for efficiency
                     if sampler == 'uniform':
-                        color = '#0066FF'  # Blue for valid uniform
+                        planning_valid_uniform_x.append(x)
+                        planning_valid_uniform_y.append(y_inv)
                     elif sampler == 'cylinder_up':
-                        color = '#006400'  # Dark Green for valid cylinder_up
+                        planning_valid_cylinder_up_x.append(x)
+                        planning_valid_cylinder_up_y.append(y_inv)
                     elif sampler == 'cylinder_down':
-                        color = '#FF1493'  # Deep pink for valid cylinder_down
-                    elif sampler == 'cylinder':
-                        color = '#FF00FF'  # Magenta (default cylinder)
-                    elif sampler == 'start':
-                        color = '#FFFF00'  # Yellow for start
+                        planning_valid_cylinder_down_x.append(x)
+                        planning_valid_cylinder_down_y.append(y_inv)
                     else:
-                        color = '#808080'  # Gray for unknown
-                
-                # Draw sample with single color (no border)
-                ax2.scatter(x, y_inv, c=color, s=40, alpha=0.9, 
-                          edgecolors='none', zorder=3, marker='o')
+                        # Other samplers (start, etc.) - plot individually
+                        if sampler == 'start':
+                            color = '#FFFF00'  # Yellow for start
+                            edge_color = '#CCCC00'
+                        else:
+                            color = '#808080'  # Gray for unknown
+                            edge_color = 'none'
+                        ax2.scatter(x, y_inv, c=color, s=50, alpha=0.95, 
+                                  edgecolors=edge_color, linewidths=0.5, zorder=8, marker='o')
+            
+            # Plot grouped valid samples for efficiency - use higher zorder so they're visible above path
+            if planning_valid_uniform_x:
+                ax2.scatter(planning_valid_uniform_x, planning_valid_uniform_y, 
+                          c='#0066FF', s=50, alpha=0.95, edgecolors='#0033CC', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Uniform')
+            if planning_valid_cylinder_up_x:
+                ax2.scatter(planning_valid_cylinder_up_x, planning_valid_cylinder_up_y, 
+                          c='#006400', s=50, alpha=0.95, edgecolors='#004400', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Cylinder Up')
+            if planning_valid_cylinder_down_x:
+                ax2.scatter(planning_valid_cylinder_down_x, planning_valid_cylinder_down_y, 
+                          c='#FF1493', s=50, alpha=0.95, edgecolors='#CC0066', linewidths=0.5, zorder=8, marker='o',
+                          label='Valid Cylinder Down')
+            
+            # Plot invalid planning samples
+            if show_invalid and planning_invalid_x:
+                ax2.scatter(planning_invalid_x, planning_invalid_y, 
+                          c='#FF0000', s=35, alpha=0.8, edgecolors='none', zorder=7, marker='o',
+                          label='Invalid Samples')
     
     # Load and plot path on both plots
     path_plotted = False
@@ -546,34 +603,47 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
             # Y-axis: positive Y is below (bottom), negative Y is above (top)
             # Set ylim with y_max (top) first, then y_min (bottom) to match extent
             ax.set_ylim(half_height + 0.5, -half_height - 0.5)
-            ax.set_xlabel('X Position (world coordinates)', fontweight='bold')
-            ax.set_ylabel('Y Position (world coordinates, inverted)', fontweight='bold')
-            scenario_text = "Scenario: 2D Occupancy Grid Path Planning (Y-axis inverted: positive Y is below)"
+            ax.set_xlabel('X Position')
+            ax.set_ylabel('Y Position')
         else:
             ax.set_xlim(-5, 15)
             ax.set_ylim(-5, 5)
-            ax.set_xlabel('X Position (m)', fontweight='bold')
-            ax.set_ylabel('Y Position (m)', fontweight='bold')
-            scenario_text = ("Scenario: Start inside U-shaped trap.\\n" "Planner must explore backwards to escape.")
+            ax.set_xlabel('X Position (m)')
+            ax.set_ylabel('Y Position (m)')
         
         ax.set_aspect('equal')
         if not use_grid:
             ax.grid(True, linestyle='--', alpha=0.3, linewidth=0.5)
-        ax.set_title(title, fontweight='bold', pad=15)
+        ax.set_title(title, pad=15)
         
-        if path_plotted:
-            ax.legend(loc='upper right', framealpha=0.95, fancybox=True, shadow=True)
-        
-        ax.text(0.02, 0.98, scenario_text, transform=ax.transAxes,
-                fontsize=9, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        # Don't show legend on plot - will be saved separately
     
-    # Add legend for simplified sampler colors on second plot
+    # Create legend separately (will be saved to separate file)
+    from matplotlib.patches import Patch, Circle
+    legend_elements = []
+    
+    # Add final burn-in radius to legend first (so it appears early)
+    if final_burnin_radius is not None:
+        legend_elements.append(
+            Circle((0, 0), 0.1, fill=False, color='#FF6600', linewidth=3.0, 
+                  label=f'Final Burn-in Radius ({final_burnin_radius:.4f})')
+        )
+    
+    # Add path elements
+    if path_plotted:
+        legend_elements.extend([
+            plt.Line2D([0], [0], color='#0066FF', linewidth=2.5, label='Path (Uniform)'),
+            plt.Line2D([0], [0], color='#006400', linewidth=2.5, label='Path (Cylinder Up)'),
+            plt.Line2D([0], [0], color='#FF1493', linewidth=2.5, label='Path (Cylinder Down)'),
+            plt.plot([], [], 's', color='#27ae60', markersize=12, markerfacecolor='#2ecc71', 
+                    markeredgecolor='white', markeredgewidth=2, label='Start')[0],
+            plt.plot([], [], '^', color='#3498db', markersize=12, markerfacecolor='#5dade2', 
+                    markeredgecolor='white', markeredgewidth=2, label='Goal')[0]
+        ])
+    
+    # Add sample elements
     if samples_data:
-        from matplotlib.patches import Patch
-        
-        # Create legend patches with simplified color scheme (no borders)
-        legend_elements = [
+        legend_elements.extend([
             Patch(facecolor='#0066FF', edgecolor='none', 
                   label='Valid Uniform (Blue)'),
             Patch(facecolor='#006400', edgecolor='none', 
@@ -582,7 +652,7 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                   label='Valid Cylinder Down (Deep Pink)'),
             Patch(facecolor='#2ecc71', edgecolor='none', 
                   label='Burn-in Valid (Green)')
-        ]
+        ])
         
         # Add invalid samples to legend only if show_invalid is True
         if show_invalid:
@@ -594,7 +664,20 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
                 Patch(facecolor='#e74c3c', edgecolor='none', 
                       label='Burn-in Invalid (Red)')
             ])
-        ax2.legend(handles=legend_elements, loc='lower right', framealpha=0.95, fancybox=True, shadow=True, fontsize=9)
+    
+    # Save legend to separate file
+    if legend_elements:
+        legend_fig, legend_ax = plt.subplots(figsize=(6, 8))
+        legend_ax.axis('off')
+        legend_ax.legend(handles=legend_elements, loc='center', framealpha=0.95, 
+                        fancybox=True, shadow=True, fontsize=11, ncol=1)
+        legend_output_file = output_file.replace('.pdf', '_legend.pdf').replace('.png', '_legend.pdf')
+        legend_fig.savefig(legend_output_file, format='pdf', bbox_inches='tight', dpi=300)
+        legend_png_file = legend_output_file.replace('.pdf', '.png')
+        legend_fig.savefig(legend_png_file, format='png', bbox_inches='tight', dpi=300)
+        plt.close(legend_fig)
+        print(f"Legend saved to: {legend_output_file}")
+        print(f"Legend saved to: {legend_png_file}")
     
     plt.tight_layout()
     plt.savefig(output_file, format='pdf', bbox_inches='tight', dpi=300)
@@ -603,6 +686,8 @@ def visualize_bug_trap_path(path_file=None, output_file=None, samples_file=None,
     plt.savefig(png_file, format='png', bbox_inches='tight', dpi=300)
     print(f"Visualization saved to: {png_file}")
     plt.close()  # Close figure instead of showing
+    
+    return final_burnin_radius
 
 
 if __name__ == '__main__':
@@ -628,22 +713,40 @@ if __name__ == '__main__':
     samples_file = args[2] if len(args) > 2 else os.path.join(demos_disassembly_dir, 'bugtrap_samples_debug.csv')
     grid_file = args[3] if len(args) > 3 else None
     
-    # If relative paths provided, make them absolute relative to demos/disassembly
-    if not os.path.isabs(path_file):
-        path_file = os.path.join(demos_disassembly_dir, path_file)
-    if not os.path.isabs(output_file):
-        output_file = os.path.join(demos_disassembly_dir, output_file)
-    if not os.path.isabs(samples_file):
-        samples_file = os.path.join(demos_disassembly_dir, samples_file)
+    # Convert all paths to absolute paths
+    # If already absolute, use as-is; otherwise resolve relative to current working directory
+    if path_file and not os.path.isabs(path_file):
+        path_file = os.path.abspath(path_file)
+    if output_file and not os.path.isabs(output_file):
+        output_file = os.path.abspath(output_file)
+    if samples_file and not os.path.isabs(samples_file):
+        samples_file = os.path.abspath(samples_file)
     if grid_file and not os.path.isabs(grid_file):
-        grid_file = os.path.join(demos_disassembly_dir, grid_file)
+        grid_file = os.path.abspath(grid_file)
+    
+    # Debug: Print the actual files being used
+    print(f"[DEBUG] Visualization script using files:")
+    if path_file:
+        if os.path.exists(path_file):
+            mtime = os.path.getmtime(path_file)
+            print(f"  Path: {path_file} (modified: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))})")
+        else:
+            print(f"  Path: {path_file} (NOT FOUND)")
+    if samples_file:
+        if os.path.exists(samples_file):
+            mtime = os.path.getmtime(samples_file)
+            print(f"  Samples: {samples_file} (modified: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(mtime))})")
+        else:
+            print(f"  Samples: {samples_file} (NOT FOUND)")
+    if grid_file:
+        print(f"  Grid: {grid_file}")
     
     # Check if files exist
-    if not os.path.exists(path_file):
+    if path_file and not os.path.exists(path_file):
         print(f"Warning: Path file '{path_file}' not found. Showing only obstacles.")
         path_file = None
     
-    if not os.path.exists(samples_file):
+    if samples_file and not os.path.exists(samples_file):
         print(f"Warning: Samples file '{samples_file}' not found. Skipping sample visualization.")
         samples_file = None
     

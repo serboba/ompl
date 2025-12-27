@@ -9,6 +9,7 @@
 
 #include <ompl/base/samplers/sphere/CylinderSampler.h>
 #include <ompl/datastructures/geometry/GeometryUtils.h>
+#include <ompl/util/Console.h>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -154,6 +155,15 @@ void CylinderSampler::fitWithAxis(const std::vector<Point>& points, const Eigen:
 CylinderSampler::Point CylinderSampler::sampleCylinder(double extensionHeight, int direction, double radiusMultiplier, std::mt19937& rng)
 {
     if (!hasValidCylinder_) throw std::runtime_error("Cylinder not initialized");
+    
+    // DEBUG: Print cylinder sampling parameters
+    OMPL_INFORM("DEBUG CYLINDER_SAMPLER: sampleCylinder called with extensionHeight=%.6f, direction=%d, radiusMultiplier=%.6f", 
+               extensionHeight, direction, radiusMultiplier);
+    OMPL_INFORM("DEBUG CYLINDER_SAMPLER: Current cylinder height=%.6f, radius=%.6f", 
+               cylinder_.height, cylinder_.radius);
+    OMPL_INFORM("DEBUG CYLINDER_SAMPLER: Will sample from height %.6f to %.6f (extension adds %.6f)", 
+               cylinder_.height, cylinder_.height + extensionHeight, extensionHeight);
+    
     return samplePointInternal(cylinder_, extensionHeight, direction, cylinder_.radius * radiusMultiplier, rng);
 }
 
@@ -177,34 +187,30 @@ CylinderSampler::Point CylinderSampler::samplePointInternal(const Cylinder& cyl,
     bool is2D = (std::fabs(cyl.az) < 1e-6);
 
     if (is2D) {
-        // 2D case: Cylinder becomes a line
-        // Sample along the line: h * axis + perpendicular jitter
-        // For 2D, perpendicular to axis (ax, ay) is: (-ay, ax) or (ay, -ax)
-        // Normalize the axis first
+        // 2D case: Cylinder becomes a line segment
+        // Sample only along the axis, NO perpendicular jitter
+        // In 2D, adding perpendicular jitter would make total distance = sqrt(h² + r²),
+        // which is incorrect. We want samples to lie exactly on the line.
         double axis_norm = std::sqrt(cyl.ax * cyl.ax + cyl.ay * cyl.ay);
         if (axis_norm < 1e-10) {
-            // Degenerate axis, use default
-            double px = r * std::cos(theta);
-            double py = r * std::sin(theta);
+            // Degenerate axis, sample at origin
+            double px = 0.0;
+            double py = 0.0;
             double pz = 0.0;
-            double newRadius_ = std::sqrt(px * px + py * py);
+            double newRadius_ = 0.0;
             return Point{px, py, pz, newRadius_, true};
         }
         
         double ax_norm = cyl.ax / axis_norm;
         double ay_norm = cyl.ay / axis_norm;
         
-        // Perpendicular vector: (-ay, ax) - this is 90 degree rotation
-        double perp_x = -ay_norm;
-        double perp_y = ax_norm;
-        
-        // Sample: h * axis + r * (cos(θ) * perp_x + sin(θ) * perp_y)
-        // For 2D line, we sample along axis with perpendicular jitter
-        double px = h * ax_norm + r * (std::cos(theta) * perp_x + std::sin(theta) * perp_y);
-        double py = h * ay_norm + r * (std::cos(theta) * perp_y - std::sin(theta) * perp_x);
+        // Sample only along the axis: h * axis (no perpendicular jitter)
+        double px = h * ax_norm;
+        double py = h * ay_norm;
         double pz = 0.0;  // Always 0 for 2D
 
-        double newRadius_ = std::sqrt(px * px + py * py);
+        // Distance from origin is just |h| (absolute value of distance along axis)
+        double newRadius_ = std::abs(h);
 
         return Point{px, py, pz, newRadius_, true};
     }

@@ -51,6 +51,7 @@ namespace ompl
             // Accessors
             const Cylinder& getCylinder() const { return cylinder_; }
             bool hasValidCylinder() const { return hasValidCylinder_; }
+            void setCylinderHeight(double height) { cylinder_.height = height; }
 
         private:
             Cylinder cylinder_;

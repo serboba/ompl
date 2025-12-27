@@ -187,15 +187,42 @@ double AdaptiveSphereSampler::getValidSampleRate() const
 
 AdaptiveSphereSampler::Point AdaptiveSphereSampler::getRandomSampleFromCylinder(double extensionHeight, int chosenDirection)
 {
-    // Use cached cylinder if available and valid
-    if (hasCylinderAxis_)
+    // DEBUG: Print cylinder state before sampling
+    const auto& cyl = cylinderSampler_.getCylinder();
+    OMPL_INFORM("DEBUG ADAPTIVE_SPHERE: getRandomSampleFromCylinder called with extensionHeight=%.6f, direction=%d", 
+               extensionHeight, chosenDirection);
+    OMPL_INFORM("DEBUG ADAPTIVE_SPHERE: Current cylinder height=%.6f, radius=%.6f, hasValidCylinder=%d", 
+               cyl.height, cyl.radius, cylinderSampler_.hasValidCylinder());
+    OMPL_INFORM("DEBUG ADAPTIVE_SPHERE: All valid points count=%zu", allValidPoints_.size());
+    
+    // If cylinder is frozen (after burn-in), don't refit - use existing cylinder
+    if (!cylinderFrozen_)
     {
-         cylinderSampler_.fitWithAxis(allValidPoints_, cylinderAxis_, cylinderSampler_.getRadiusOffsetMultiplier());
-    }
-    else if (validPointsDirty_)
-    {
-        cylinderSampler_.fit(allValidPoints_, pcaFilterTopPercent_);
-        validPointsDirty_ = false;
+        // Preserve the height before refitting (it was set to bestRadius during burn-in)
+        double preservedHeight = cylinderSampler_.getCylinder().height;
+        
+        // Use cached cylinder if available and valid
+        if (hasCylinderAxis_)
+        {
+             cylinderSampler_.fitWithAxis(allValidPoints_, cylinderAxis_, cylinderSampler_.getRadiusOffsetMultiplier());
+             // Restore the preserved height (only update axis, not height)
+             if (preservedHeight > 0.0) {
+                 cylinderSampler_.setCylinderHeight(preservedHeight);
+             }
+             OMPL_INFORM("DEBUG ADAPTIVE_SPHERE: Refitted cylinder with axis, preserved height=%.6f", 
+                        preservedHeight);
+        }
+        else if (validPointsDirty_)
+        {
+            cylinderSampler_.fit(allValidPoints_, pcaFilterTopPercent_);
+            validPointsDirty_ = false;
+            // Restore the preserved height (only update axis, not height)
+            if (preservedHeight > 0.0) {
+                cylinderSampler_.setCylinderHeight(preservedHeight);
+            }
+            OMPL_INFORM("DEBUG ADAPTIVE_SPHERE: Refitted cylinder, preserved height=%.6f", 
+                       preservedHeight);
+        }
     }
     
     Point sample = cylinderSampler_.sampleCylinder(extensionHeight, chosenDirection, cylinderSampler_.getSamplingRadiusMultiplier(), rng_);
@@ -210,7 +237,16 @@ AdaptiveSphereSampler::Point AdaptiveSphereSampler::getRandomSampleFromCylinder(
 
 AdaptiveSphereSampler::Point AdaptiveSphereSampler::getRandomSampleFromCylinder(double extensionHeight, int chosenDirection, const Eigen::Vector3d &axis)
 {
+    // Preserve the height before refitting (it was set to bestRadius during burn-in)
+    double preservedHeight = cylinderSampler_.getCylinder().height;
+    
     cylinderSampler_.fitWithAxis(allValidPoints_, axis, cylinderSampler_.getRadiusOffsetMultiplier());
+    
+    // Restore the preserved height (only update axis, not height)
+    if (preservedHeight > 0.0) {
+        cylinderSampler_.setCylinderHeight(preservedHeight);
+    }
+    
     Point sample = cylinderSampler_.sampleCylinder(extensionHeight, chosenDirection, cylinderSampler_.getSamplingRadiusMultiplier(), rng_);
     
     // Project to 2D circle if needed

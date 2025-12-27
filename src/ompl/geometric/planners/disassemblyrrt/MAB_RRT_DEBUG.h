@@ -35,8 +35,8 @@
 /* Author: Servet Bora Bayraktar */
 
 /**
- * @file MAB_SSRRT_DEBUG.h
- * @brief Multi-Armed Bandit Sphere-Sampled RRT (Debug Version)
+ * @file MAB_RRT_DEBUG.h
+ * @brief Multi-Armed Bandit RRT (Debug Version)
  * 
  * =============================================================================
  * ALGORITHM OVERVIEW
@@ -85,10 +85,10 @@
  * =============================================================================
  */
 
-#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_DEBUG_
-#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_SSRRT_DEBUG_
+#ifndef OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_RRT_DEBUG_
+#define OMPL_GEOMETRIC_PLANNERS_DISASSEMBLYRRT_MAB_RRT_DEBUG_
 
-#include "ompl/geometric/planners/disassemblyrrt/MAB_SSRRT.h"
+#include "ompl/geometric/planners/disassemblyrrt/MAB_RRT.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -97,11 +97,11 @@ namespace ompl {
     namespace geometric {
 
         /**
-         * @class MAB_SSRRT_DEBUG
-         * @brief DEBUG VERSION: Multi-Armed Bandit Sphere-Sampled RRT
+         * @class MAB_RRT_DEBUG
+         * @brief DEBUG VERSION: Multi-Armed Bandit RRT
          * 
          * This is a debug version with extensive logging and sample tracking.
-         * Use MAB_SSRRT for production code.
+         * Use MAB_RRT for production code.
          * 
          * This planner extends RRT with:
          * - Adaptive sphere sampling for constraint discovery
@@ -113,18 +113,19 @@ namespace ompl {
          * - Narrow passage problems with known constraint structure
          * - Environments where directed exploration outperforms uniform
          */
-        class MAB_SSRRT_DEBUG : public MAB_SSRRT {
+        class MAB_RRT_DEBUG : public MAB_RRT {
         public:
             /** @brief Constructor with YAML configuration file path */
-            MAB_SSRRT_DEBUG(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
+            MAB_RRT_DEBUG(const base::SpaceInformationPtr &si, const std::string &yamlFilePath);
 
-            ~MAB_SSRRT_DEBUG() override;
+            ~MAB_RRT_DEBUG() override;
             
             /** @brief Export debug sample data to CSV file */
             void exportSampleData(const std::string& filename) const;
             
             /** @brief Export path with sampler information to CSV */
-            void exportPathWithSamplers(const std::string& filename, const std::vector<MAB_SSRRT::Motion*>& mpath) const;
+            void exportPathWithSamplers(const std::string& filename, const std::vector<MAB_RRT::Motion*>& mpath) const;
+            
             
             // Override base class methods to add debug tracking
             base::PlannerStatus solve(const base::PlannerTerminationCondition &ptc) override;
@@ -208,6 +209,10 @@ namespace ompl {
             
             /** @brief Default state space dimension (6D: RPY + XYZ) */
             static inline constexpr int kDefaultStateDimension = 6;
+            
+            // Constants for goal connection and coordinate comparison
+            static inline constexpr double kGoalConnectionDistanceThreshold = 0.5;  // Distance threshold for considering goal connection (in state space units)
+            static inline constexpr double kCoordinateComparisonTolerance = 0.01;    // Tolerance for comparing coordinates (accounts for floating-point precision)
             
             // ====================================================================
             // INNER CLASSES
@@ -301,15 +306,15 @@ namespace ompl {
             /** @brief Check if validity rate is in acceptable range */
             bool isValidityRateInTargetRange(double validity_rate) const;
             
-            /** @brief Shrink or grow radius based on validity feedback */
-            double adjustRadiusBasedOnValidity(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
-                                              double current_radius, double validity_rate);
-            
             /** @brief Finalize burn-in and set best radius */
             void finalizeBurnin(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere, double final_radius);
             
             /** @brief Compute sample validity rate at current radius */
             double computeValidityRate();
+            
+            /** @brief Adjust radius based on validity using gradient-like log-space updates */
+            double adjustRadiusBasedOnValidity(std::unique_ptr<sampling::AdaptiveSphereSampler>& sphere,
+                                              double current_radius, double validity_rate);
 
             // ====================================================================
             // SAMPLING METHODS
@@ -332,12 +337,12 @@ namespace ompl {
             /** @brief Generate sample and validate motion */
             template <typename ValidateFunc>
             bool generateAndValidateSample(base::State* sample_state, ValidateFunc& validateState,
-                                          double radius, MABPath& selectedMABPath);
+                                          double extensionHeight, MABPath& selectedMABPath);
             
             /** @brief Sample from cylinder (direction already selected) */
             template <typename ValidateFunc>
             bool sampleFromCylinder(base::State* sample_state, ValidateFunc& validateState,
-                                   double radius, MABPath& selectedMABPath);
+                                   double extensionHeight, MABPath& selectedMABPath);
             
             /** @brief Fallback to uniform if cylinder fails */
             template <typename ValidateFunc>
@@ -350,6 +355,9 @@ namespace ompl {
             
             /** @brief Sample uniformly across all dimensions */
             void sampleUniformHypothesis(base::State *state);
+            
+            /** @brief Sample from cylinder hypothesis (along principal axis) */
+            void sampleCylinderHypothesis(base::State *state, double radius, bool directionUp);
             
             /** @brief Copy sample vector into OMPL state */
             void copySampleVectorIntoState(base::State *sample_state, SamplingArm &arm,
@@ -416,18 +424,15 @@ namespace ompl {
             
             // Adaptive sampling parameters
             int adaptiveQuasirandomSampleSize_{128};
-            // Bisection search parameters
-            double adaptiveBisectionLowerRadius_{0.00001};
-            double adaptiveBisectionUpperRadius_{1.0};
-            double adaptiveBisectionTolerance_{0.0001};
             double adaptiveMinExpectedValidityRate_{0.3};
             double adaptiveMaxExpectedValidityRate_{0.7};
             int adaptiveBurninMaxSteps_{20};
-            // Legacy parameters (kept for compatibility)
-            double adaptiveStartRadius_{0.5};
-            double adaptiveMinRadius_{0.01};
-            double adaptiveShrinkStep_{0.1};
-            double adaptiveGrowStep_{0.1};
+            
+            // Grow/shrink parameters
+            double adaptiveStartRadius_{0.1};
+            double adaptiveMinRadius_{0.0001};
+            double adaptiveShrinkStep_{0.1};  // Shrink step for radius adjustment
+            double adaptiveGrowStep_{0.1};     // Grow step for radius adjustment
 
             // Initial uniform check
             double initialFreeSamplingProbability_{0.5};
@@ -437,6 +442,7 @@ namespace ompl {
             std::string outputDirectory_;
 
             double sphereExtensionEps_{0.0};
+            double burninFinalRadius_{0.0};  // Store burn-in radius for fixed extension height
             
             // MAB rewards
             double uniformSamplerInvalidReward_{0.0};
