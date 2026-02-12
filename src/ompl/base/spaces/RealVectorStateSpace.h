@@ -67,6 +67,10 @@ namespace ompl
                 deviation stdDev. If the sampled value exceeds the state
                 space boundary, it is thresholded to the nearest boundary. */
             void sampleGaussian(State *state, const State *mean, double stdDev) override;
+
+            /** \brief Sample a state using only selected indices (for custom samplers)
+                If selectedIndices[i] == 1, the dimension i is sampled uniformly */
+            virtual void sampleSelectedIndices(State *state, std::vector<int> selectedIndices);
         };
 
         /** \brief A state space representing R<sup>n</sup>. The distance function is the L2 norm. */

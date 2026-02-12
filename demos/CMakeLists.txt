@@ -62,9 +62,9 @@ if (OMPL_BUILD_DEMOS)
     add_ompl_demo(demo_MAB_RRT disassembly/MAB_RRT_Demo.cpp)
     target_link_libraries(demo_MAB_RRT PRIVATE yaml-cpp::yaml-cpp)
     
-    # MAB-RRT Benchmark - Compare planners on occupancy grid
-    add_ompl_demo(demo_benchmark_occupancy_grid disassembly/benchmark_occupancy_grid.cpp)
-    target_link_libraries(demo_benchmark_occupancy_grid PRIVATE yaml-cpp::yaml-cpp)
+    # MAB-RRT Benchmark - Compare planners on occupancy grid (file not in repo)
+    # add_ompl_demo(demo_benchmark_occupancy_grid disassembly/benchmark_occupancy_grid.cpp)
+    # target_link_libraries(demo_benchmark_occupancy_grid PRIVATE yaml-cpp::yaml-cpp)
     
     # Copy config file to build directory
     configure_file(

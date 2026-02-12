@@ -82,6 +82,23 @@ void ompl::base::RealVectorStateSampler::sampleGaussian(State *state, const Stat
     }
 }
 
+void ompl::base::RealVectorStateSampler::sampleSelectedIndices(State *state, std::vector<int> selectedIndices)
+{
+    const unsigned int dim = space_->getDimension();
+    const RealVectorBounds &bounds = static_cast<const RealVectorStateSpace *>(space_)->getBounds();
+
+    auto *rstate = static_cast<RealVectorStateSpace::StateType *>(state);
+    for (unsigned int i = 0; i < dim && i < selectedIndices.size(); ++i)
+    {
+        if (selectedIndices[i] == 1)
+        {
+            // Sample this dimension uniformly within bounds
+            rstate->values[i] = rng_.uniformReal(bounds.low[i], bounds.high[i]);
+        }
+        // If selectedIndices[i] == 0, leave the dimension unchanged
+    }
+}
+
 void ompl::base::RealVectorStateSpace::registerProjections()
 {
     // compute a default random projection
