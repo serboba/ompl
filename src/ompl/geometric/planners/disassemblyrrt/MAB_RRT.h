@@ -149,6 +149,12 @@ namespace ompl {
 
             void setup() override;
 
+            /** @brief Enable or disable debug output */
+            void setDebug(bool debug);
+
+            /** @brief Set the file path for debug output */
+            void setDebugOutputFile(const std::string &filePath);
+
             // ====================================================================
             // ENUMERATIONS
             // ====================================================================

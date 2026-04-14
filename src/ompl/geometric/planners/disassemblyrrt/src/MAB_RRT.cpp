@@ -1523,3 +1523,13 @@ void ompl::geometric::MAB_RRT::getPlannerData(base::PlannerData &data) const
     }
 }
 
+
+void ompl::geometric::MAB_RRT::setDebug(bool /* debug */)
+{
+    // Stub implementation for downstream compatibility
+}
+
+void ompl::geometric::MAB_RRT::setDebugOutputFile(const std::string & /* filePath */)
+{
+    // Stub implementation for downstream compatibility
+}
