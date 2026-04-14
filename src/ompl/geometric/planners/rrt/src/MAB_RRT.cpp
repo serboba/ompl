@@ -183,7 +183,7 @@ void ompl::geometric::MAB_RRT::loadYAMLConfig(const std::string& yamlFilePath)
                              config["adaptive_shrink_step"].as<double>() : 0.1;
         adaptiveGrowStep_ = config["adaptive_grow_step"] ? 
                           config["adaptive_grow_step"].as<double>() : 0.1;
-
+        
         // Maximum radius limit (always from YAML config - required)
         adaptiveMaxRadius_ = config["adaptive_max_radius"] ? 
                             config["adaptive_max_radius"].as<double>() : 
@@ -484,27 +484,27 @@ double ompl::geometric::MAB_RRT::computeValidityRate()
  */
 double ompl::geometric::MAB_RRT::computeMaxBurninRadius() const
 {
-    // NOTE: This function should not be called in normal operation since adaptive_max_radius
-    // must be specified in YAML config. This function is kept for backward compatibility
-    // but should not be used as a fallback.
-    
     // Safety check: ensure si_ is valid and set up
     if (!si_ || !si_->getStateSpace())
     {
-        throw std::runtime_error("SpaceInformation not available - adaptive_max_radius must be specified in YAML config");
+        OMPL_WARN("SpaceInformation not available, using default max radius");
+        return 1000.0;
     }
     
     // Ensure state space is set up before accessing bounds
     if (!si_->isSetup())
     {
-        throw std::runtime_error("SpaceInformation not set up - adaptive_max_radius must be specified in YAML config");
+        OMPL_WARN("SpaceInformation not set up yet, using default max radius");
+        return 1000.0;
     }
     
     // Get state space as RealVectorStateSpace
     const auto* rvss = dynamic_cast<const base::RealVectorStateSpace*>(si_->getStateSpace().get());
     if (!rvss)
     {
-        throw std::runtime_error("State space is not RealVectorStateSpace - adaptive_max_radius must be specified in YAML config");
+        // If not RealVectorStateSpace, return a large default value
+        OMPL_WARN("State space is not RealVectorStateSpace, using default max radius");
+        return 1000.0;
     }
     
     // Get bounds - use const reference (getBounds returns const reference)
@@ -514,7 +514,8 @@ double ompl::geometric::MAB_RRT::computeMaxBurninRadius() const
     // Safety check: ensure bounds are valid
     if (bounds.low.empty() || bounds.high.empty() || bounds.low.size() != bounds.high.size())
     {
-        throw std::runtime_error("Invalid bounds - adaptive_max_radius must be specified in YAML config");
+        OMPL_WARN("Invalid bounds, using default max radius");
+        return 1000.0;
     }
     
     // Determine translation indices (same logic as createCylinderSamplingArm)
@@ -894,7 +895,7 @@ bool ompl::geometric::MAB_RRT::getSample(
             OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f (clamped to %.6f), extensionFactor=%.6f, extensionHeight=%.6f", 
                        sphere->bestRadius, clampedBestRadius, extensionFactor, extensionHeight);
         } else {
-        OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f, extensionFactor=%.6f, extensionHeight=%.6f", 
+            OMPL_INFORM("DEBUG EXTENSION: bestRadius=%.6f, extensionFactor=%.6f, extensionHeight=%.6f", 
                        clampedBestRadius, extensionFactor, extensionHeight);
         }
     }
