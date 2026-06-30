@@ -58,6 +58,9 @@ if (OMPL_BUILD_DEMOS)
 
     add_ompl_demo(demo_SpaceTimePlanning SpaceTimePlanning.cpp)
 
+    # LA-RRT rearrangement planning over a fragmented state space
+    add_ompl_demo(demo_LowActionsPlanning LowActionsPlanning.cpp)
+
     # MAB-SSRRT Demo - Multi-Armed Bandit Sphere-Sampled RRT planner
     add_ompl_demo(demo_MAB_SSRRT disassembly/MAB_SSRRT_Demo.cpp)
     target_link_libraries(demo_MAB_SSRRT PRIVATE yaml-cpp::yaml-cpp)
