@@ -134,6 +134,13 @@ namespace ompl
 
             void skipFragments(std::vector<ompl::base::State *> &mainPath);
 
+            /** \brief Deep-copy a path (allocates fresh states). */
+            std::vector<ompl::base::State *> clonePath(const std::vector<ompl::base::State *> &path);
+
+            /** \brief True if \e path starts at \e from, ends at \e to and every motion is collision-free. */
+            bool isPathValid(const std::vector<ompl::base::State *> &path, const base::State *from,
+                             const base::State *to);
+
 
 
         protected:
@@ -143,6 +150,12 @@ namespace ompl
             int goalIndex_;
 
             base::OptimizationObjectivePtr opt_;
+
+            // Captured start/goal configurations of the path currently being defragmented;
+            // valid only for the duration of doPathDefragComplete(). Used to keep every
+            // optimisation step from truncating the goal or breaking start connectivity.
+            base::State *startState_{nullptr};
+            base::State *goalState_{nullptr};
 
         };
 

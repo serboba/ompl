@@ -305,7 +305,12 @@ void ompl::geometric::PathDefragmenter::getFragmentIDs(std::vector<ompl::base::S
         }
     }
 
-    if(prev_index != fragmentIDs.back().id)
+    // The trailing run is its own fragment. Guard against an empty fragmentIDs:
+    // a path whose transitions never change group has a single fragment, and
+    // dereferencing fragmentIDs.back() here would be undefined behaviour.
+    if(fragmentIDs.empty())
+        fragmentIDs.push_back(FragmentIntervals(0, path.size()-1, prev_index));
+    else if(prev_index != fragmentIDs.back().id)
         fragmentIDs.push_back(FragmentIntervals(fragmentIDs.back().end_index+1,path.size()-1, prev_index));
 
     if(goalFragment)
@@ -338,16 +343,20 @@ void ompl::geometric::PathDefragmenter::skipFragments(std::vector<ompl::base::St
     std::vector<FragmentIntervals> fragmentIDs;
     getFragmentIDs(mainPath,fragmentIDs);
 
-    for(size_t i = 0;  i < fragmentIDs.size()-1;  i++)
+    // i + 1 < size() (never size() - 1): a single-fragment path has size() == 1,
+    // and the unsigned subtraction would wrap around and run the loop out of range.
+    for(size_t i = 0;  i + 1 < fragmentIDs.size();  i++)
     {
         std::vector<std::pair<ompl::base::State *,int>> pathA;
         std::vector<std::pair<ompl::base::State *,int>> pathB;
         std::vector<ompl::base::State *> result_;
 
-
+        // The reconnection replays the surviving fragments starting from the real
+        // path start. Using a copy of mainPath[0] (not a zeroed state) is essential:
+        // it becomes the first state of the rewired path, so a zeroed state would
+        // silently corrupt the start configuration.
         ompl::base::State *temp_from = si_->getStateSpace()->allocState();
-        std::vector<double> tx(si_->getStateDimension(), 0.0);
-        si_->getStateSpace()->copyFromReals(temp_from, tx);
+        si_->getStateSpace()->copyState(temp_from, mainPath.at(0));
 
         if(i != 0){
             getFragment(1, fragmentIDs.at(i).start_index, mainPath, pathA);
@@ -377,7 +386,17 @@ void ompl::geometric::PathDefragmenter::skipFragments(std::vector<ompl::base::St
                 si_->freeState(temp_from);
                 continue;
             }
+            freeStates(pathB);
+        }
 
+        // A fragment may only be skipped if it is not mandatory to reach the goal:
+        // the rewired path must still end at the goal configuration. Otherwise the
+        // skip drops a goal-reaching motion and must be rejected.
+        if(!result_.empty() && goalState_ != nullptr && !si_->equalStates(result_.back(), goalState_))
+        {
+            freeStates(result_);
+            si_->freeState(temp_from);
+            continue;
         }
 
         if(!result_.empty())
@@ -414,44 +433,76 @@ void ompl::geometric::PathDefragmenter::trySkipFragment(std::vector<ompl::base::
 
 void ompl::geometric::PathDefragmenter::simplifyActionIntervals(std::vector<ompl::base::State*> &mainPath) // finds intervals of same action index, builds shortcuts
 {
-    int prev_index = getChangedIndex(mainPath.at(0),mainPath.at(1));
-    std::vector<int> transitions;
+    const size_t n = mainPath.size();
+    if(n < 3)
+        return;
 
-    for (size_t i = 1; i < mainPath.size()-1 ; ++i) {
-        if(prev_index != getChangedIndex(mainPath.at(i),mainPath.at(i+1)))
+    // Keep the endpoints and every group-transition boundary. Within a same-group run
+    // the intermediate waypoints are candidates for removal (one run = one action), but
+    // collapsing them straightens the run start -> run end, which can cut the corner of
+    // an obstacle detour. We therefore keep a run's interior unless the straight
+    // shortcut between its boundaries is collision-free.
+    std::vector<char> keep(n, 0);
+    keep[0] = 1;
+    keep[n - 1] = 1;
+
+    int prev_index = getChangedIndex(mainPath.at(0), mainPath.at(1));
+    for(size_t i = 1; i + 1 < n; ++i)
+    {
+        int idx = getChangedIndex(mainPath.at(i), mainPath.at(i + 1));
+        if(idx != prev_index)
         {
-            transitions.push_back(i);
-            prev_index = getChangedIndex(mainPath.at(i),mainPath.at(i+1));
+            keep[i] = 1;
+            prev_index = idx;
         }
+    }
+
+    std::vector<size_t> boundaries;
+    for(size_t i = 0; i < n; ++i)
+        if(keep[i])
+            boundaries.push_back(i);
+
+    for(size_t k = 0; k + 1 < boundaries.size(); ++k)
+    {
+        size_t a = boundaries.at(k);
+        size_t b = boundaries.at(k + 1);
+        if(b > a + 1 && !si_->checkMotion(mainPath.at(a), mainPath.at(b)))
+            for(size_t j = a + 1; j < b; ++j)
+                keep[j] = 1;   // shortcut would collide: keep the detour waypoints
+    }
+
+    std::vector<ompl::base::State *> simplifiedPath;
+    for(size_t i = 0; i < n; ++i)
+    {
+        if(keep[i])
+            simplifiedPath.push_back(mainPath.at(i));
         else
             si_->freeState(mainPath.at(i));
     }
 
-    std::vector<ompl::base::State *> simplifiedPath;
-
-    simplifiedPath.push_back(mainPath.at(0));
-    for(auto &index : transitions){
-        simplifiedPath.push_back(mainPath.at(index));
-    }
-
-    simplifiedPath.push_back(mainPath.back());
-    mainPath.clear();
     mainPath = simplifiedPath;
-
 }
 
 
 void ompl::geometric::PathDefragmenter::cutOffIfGoalReached(std::vector<ompl::base::State*> &mainPath)
 {
-    for(size_t i = mainPath.size()-1 ; i > 0 ; i--)
+    // If the path passes through the goal configuration before its end, every state
+    // afterwards is a redundant excursion and can be dropped. We compare against the
+    // captured goal state (the full configuration), not a single goal index: the old
+    // index-based test removed the final move of every non-goal-index group, which on
+    // a full rearrangement problem truncates objects short of their goal.
+    if(goalState_ == nullptr || mainPath.size() < 3)
+        return;
+
+    for(size_t i = 1; i + 1 < mainPath.size(); i++)
     {
-        if(getChangedIndex(mainPath.at(i),mainPath.at(i-1)) != goalIndex_)
+        if(si_->equalStates(mainPath.at(i), goalState_))
         {
-            si_->freeState(mainPath.at(i));
-            mainPath.erase(mainPath.begin()+i);
+            for(size_t j = i + 1; j < mainPath.size(); j++)
+                si_->freeState(mainPath.at(j));
+            mainPath.erase(mainPath.begin() + i + 1, mainPath.end());
+            return;
         }
-        else
-            break;
     }
 }
 
@@ -502,16 +553,80 @@ void ompl::geometric::PathDefragmenter::checkRepairPath(std::vector<ompl::base::
 
 
 
+std::vector<ompl::base::State *> ompl::geometric::PathDefragmenter::clonePath(const std::vector<ompl::base::State *> &path)
+{
+    std::vector<ompl::base::State *> copy;
+    copy.reserve(path.size());
+    for(auto *s : path)
+    {
+        ompl::base::State *c = si_->allocState();
+        si_->copyState(c, s);
+        copy.push_back(c);
+    }
+    return copy;
+}
+
+bool ompl::geometric::PathDefragmenter::isPathValid(const std::vector<ompl::base::State *> &path,
+                                                    const ompl::base::State *from, const ompl::base::State *to)
+{
+    if(path.size() < 2)
+        return false;
+    if(!si_->equalStates(path.front(), from) || !si_->equalStates(path.back(), to))
+        return false;
+    for(size_t i = 0; i + 1 < path.size(); ++i)
+        if(!si_->checkMotion(path.at(i), path.at(i + 1)))
+            return false;
+    return true;
+}
+
 void ompl::geometric::PathDefragmenter::doPathDefragComplete(std::vector<ompl::base::State *> &path_)
 {
     checkRepairPath(path_);
 
-    startPathDefrag(path_);
+    if(path_.size() < 2)
+        return;
 
-    cutOffIfGoalReached(path_);
+    // Capture the true endpoints. Every optimisation below must preserve them and keep
+    // the path collision-free; the guard rolls a stage back if it ever does not, so a
+    // buggy or degenerate stage can never truncate the goal or reintroduce a collision.
+    startState_ = si_->allocState();
+    si_->copyState(startState_, path_.front());
+    goalState_ = si_->allocState();
+    si_->copyState(goalState_, path_.back());
 
-    trySkipFragment(path_);
+    std::vector<ompl::base::State *> snapshot = clonePath(path_);   // last known-valid path
 
-    simplifyActionIntervals(path_);
+    // The baseline we fall back to must itself be valid. checkRepairPath() isolates
+    // multi-group edges without an explicit collision check, so warn (rather than
+    // silently return a bad path) in the -- in practice unreachable, since interpolate()
+    // already moves group-by-group -- case where it produced a colliding baseline.
+    if(!isPathValid(snapshot, startState_, goalState_))
+        OMPL_WARN("PathDefragmenter: path is not collision-free after repair; "
+                  "defragmentation may return an invalid path");
 
+    // Accept a stage's output only if it preserves the endpoints, stays collision-free
+    // AND does not increase the action count; otherwise roll the stage back. This makes
+    // the wrapper enforce all three invariants the defragmentation must keep.
+    auto guard = [&]()
+    {
+        if(isPathValid(path_, startState_, goalState_) && getCostPath(path_) <= getCostPath(snapshot))
+        {
+            freeStates(snapshot);
+            snapshot = clonePath(path_);
+        }
+        else
+        {
+            freeStates(path_);
+            path_ = clonePath(snapshot);
+        }
+    };
+
+    startPathDefrag(path_);          guard();
+    cutOffIfGoalReached(path_);      guard();
+    trySkipFragment(path_);          guard();
+    simplifyActionIntervals(path_);  guard();
+
+    freeStates(snapshot);
+    si_->freeState(startState_); startState_ = nullptr;
+    si_->freeState(goalState_);  goalState_ = nullptr;
 }

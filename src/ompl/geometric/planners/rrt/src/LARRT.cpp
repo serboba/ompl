@@ -486,7 +486,9 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
 
                 if(getCostPath(path->getStates()) < bestCost_.value())
                 {
-                    OMPL_DEBUG("Better path found, new path cost: %d, old path cost: %d", getCostPath(path->getStates()), int(bestCost_.value()));
+                    // bestCost_ starts at +inf, so print it as a real (avoids the
+                    // INT_MIN that casting infinity to int produced).
+                    OMPL_DEBUG("Better path found, new path cost: %d, old path cost: %g", getCostPath(path->getStates()), bestCost_.value());
                     freeStates(best_path->getStates());
                     best_path = path;
                     bestCost_ = base::Cost(getCostPath(best_path->getStates()));
