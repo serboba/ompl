@@ -1,0 +1,21 @@
+{
+  "demo": "workspace",
+  "groups": [[0, 1], [2, 3]],
+  "object_names": ["puck A", "puck B"],
+  "bounds": [[0.0, 10.0], [0.0, 10.0], [0.0, 10.0], [0.0, 10.0]],
+  "obstacles": [
+    {"xmin": 1, "xmax": 3, "ymin": 1, "ymax": 3},
+    {"xmin": 7, "xmax": 9, "ymin": 1, "ymax": 3},
+    {"xmin": 1, "xmax": 3, "ymin": 7, "ymax": 9},
+    {"xmin": 7, "xmax": 9, "ymin": 7, "ymax": 9}
+  ],
+  "start": [1, 5, 5, 1],
+  "goal": [9, 5, 5, 9],
+  "action_count": 3,
+  "path": [
+    [1, 5, 5, 1],
+    [7.94838, 6.00619, 5, 1],
+    [7.94838, 6.00619, 5, 9],
+    [9, 5, 5, 9]
+  ]
+}

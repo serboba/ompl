@@ -61,6 +61,10 @@ if (OMPL_BUILD_DEMOS)
     # LA-RRT rearrangement planning over a fragmented state space
     add_ompl_demo(demo_LowActionsPlanning LowActionsPlanning.cpp)
 
+    # LA-RRT 2D rearrangement demos with JSON output for visualization
+    add_ompl_demo(demo_LARRT2D_configspace larrt2d/LARRT2D_ConfigSpace.cpp)
+    add_ompl_demo(demo_LARRT2D_workspace larrt2d/LARRT2D_Workspace.cpp)
+
     # MAB-SSRRT Demo - Multi-Armed Bandit Sphere-Sampled RRT planner
     add_ompl_demo(demo_MAB_SSRRT disassembly/MAB_SSRRT_Demo.cpp)
     target_link_libraries(demo_MAB_SSRRT PRIVATE yaml-cpp::yaml-cpp)
