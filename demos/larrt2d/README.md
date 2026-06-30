@@ -22,23 +22,23 @@ Because one object moves per action, every path segment is **axis-aligned**, so
 "minimal actions" reads visually as "fewest axis-aligned segments". The two
 objects share a track and may not come within a gap of each other (the forbidden
 diagonal band `|x - y| < gap` while `x + y < sum_limit`), except in a passing
-zone at the high end. Re-ordering the two objects therefore needs a **5-action**
-weave up through the passing zone and back. Output: `out/configspace.json`.
+zone at the high end. After defragmentation, re-ordering the two objects is a
+**4-action** weave up through the passing zone and back.
+Output: `out/configspace.json`.
 
 ### Demo B -- workspace rearrangement explainer (`demo_LARRT2D_workspace`)
 Two pucks in a shared 2-D workspace, `groups = {{0,1}, {2,3}}` (puck A =
 dims 0,1; puck B = dims 2,3). Each action moves one puck while the other stays
 put. Four corner obstacles leave a cross-shaped free space; puck A is relocated
-along a row and puck B along a column, crossing at the centre. Since the pucks
-may not overlap, LA-RRT sequences them (puck A steps aside, puck B passes, puck A
-finishes) -- a **3-action** plan. Output: `out/workspace.json`.
+along a row and puck B along a column, crossing at the centre. The pucks may not
+overlap, but since only one moves per action they are never at the centre at the
+same time, so after defragmentation the plan is the **2-action** optimum (move
+puck B up the column, then puck A across the row). Output: `out/workspace.json`.
 
-> **Note on robustness.** For these small problems the `PathDefragmenter`
-> occasionally returns a truncated / garbled / colliding path (and on some seeds
-> throws). Each demo therefore **validates** every returned path in C++ (exact
-> start/goal, dense collision check) and **re-plans** until a genuine,
-> collision-free solution is obtained. The validated path is what gets written to
-> JSON, so the visualised result is always correct.
+> **Reproducibility.** Each demo fixes the RNG seed and solves once; the returned
+> path is sanity-checked in C++ (exact start/goal, dense collision check) before
+> being written to JSON. No re-planning loop is needed -- the `PathDefragmenter`
+> returns a valid, minimal-action path directly.
 
 ## Build
 
