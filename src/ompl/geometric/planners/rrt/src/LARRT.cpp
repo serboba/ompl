@@ -182,58 +182,6 @@ double ompl::geometric::LARRT::groupDistance(const base::State *a, const base::S
     return d;
 }
 
-void ompl::geometric::LARRT::fragmentedInterpolate(const base::State *from, const base::State *to, double t,
-                                                   base::State *state) const
-{
-    std::vector<double> f, tv;
-    si_->getStateSpace()->copyToReals(f, from);
-    si_->getStateSpace()->copyToReals(tv, to);
-    std::vector<double> s = f;
-
-    if (t >= 1.0)
-    {
-        s = tv;
-    }
-    else
-    {
-        // normalized share of the total L1 distance carried by each group
-        std::vector<double> gd(group_indices.size(), 0.0);
-        double total = 0.0;
-        for (size_t g = 0; g < group_indices.size(); ++g)
-        {
-            for (int idx : group_indices.at(g))
-                gd[g] += std::abs(f[idx] - tv[idx]);
-            total += gd[g];
-        }
-        for (auto &x : gd)
-            x = (total > 1e-10 && !std::isnan(total)) ? x / total : 0.0;
-
-        // the group in which parameter t currently falls
-        size_t index = group_indices.empty() ? 0 : group_indices.size() - 1;
-        double sum = 0.0;
-        for (size_t g = 0; g < group_indices.size(); ++g)
-        {
-            sum += gd[g];
-            if (sum >= t) { index = g; break; }
-        }
-
-        double dInterp = 0.0;
-        for (size_t g = 0; g < index; ++g)   // groups before: fully at `to`
-        {
-            for (int idx : group_indices.at(g))
-                s[idx] = tv[idx];
-            dInterp += gd[g];
-        }
-        double frac = (std::abs(gd[index]) > 1e-10) ? (t - dInterp) / gd[index] : 0.0;
-        for (int idx : group_indices.at(index))   // the active group: partial
-            s[idx] = f[idx] + frac * (tv[idx] - f[idx]);
-        for (size_t g = index + 1; g < group_indices.size(); ++g)   // groups after: at `from`
-            for (int idx : group_indices.at(g))
-                s[idx] = f[idx];
-    }
-    si_->getStateSpace()->copyFromReals(state, s);
-}
-
 void ompl::geometric::LARRT::createNewMotion(const base::State *st, ompl::geometric::LARRT::Motion *premotion,
                                              ompl::geometric::LARRT::Motion *newmotion){
     si_->copyState(newmotion->state, st);
@@ -322,80 +270,47 @@ ompl::geometric::LARRT::GrowState ompl::geometric::LARRT::growTree(TreeData &tre
     /* find closest state in the tree */
     Motion *nmotion = tree->nearest(rmotion);
 
-    /* assume we can reach the state we go towards */
-    bool reach = true;
-    /* find state to add */
-    base::State *dstate = rmotion->state;
-    double d = groupDistance(nmotion->state, rmotion->state);
-    // interpolate by maxDistance_ (not maxDistance_ / d) so a step is taken even for distant
-    // samples; group-wise so the factored motion primitive does not depend on the state space
-    fragmentedInterpolate(nmotion->state, rmotion->state, maxDistance_, tgi.xstate);
+    std::vector<double> nreals, rreals;
+    si_->getStateSpace()->copyToReals(nreals, nmotion->state);
+    si_->getStateSpace()->copyToReals(rreals, rmotion->state);
 
-    if (si_->equalStates(nmotion->state, tgi.xstate))
+    /* factors (groups/objects) that differ between the tree node and the sample */
+    std::vector<int> diff = getChangedGroups(nreals, rreals);
+    if (diff.empty())
         return TRAPPED;
 
-    dstate = tgi.xstate;
+    /* Advance ONE factor toward the sample, chosen at random among the differing
+       factors and range-limited to maxDistance_ within that factor's L1. Picking a
+       random factor (rather than always the lowest-index one) is what makes the
+       factored search actually explore every object; moving a single factor keeps
+       every tree edge at action cost 1 (no isolation needed). */
+    int g = diff[rng_.uniformInt(0, static_cast<int>(diff.size()) - 1)];
+    double dg = 0.0;
+    for (int idx : group_indices.at(g))
+        dg += std::abs(nreals[idx] - rreals[idx]);
+    double frac = (dg > maxDistance_) ? (maxDistance_ / dg) : 1.0;
 
-    if(d>maxDistance_){
-        reach = false;
-    }
+    std::vector<double> dreals = nreals;
+    for (int idx : group_indices.at(g))
+        dreals[idx] = nreals[idx] + frac * (rreals[idx] - nreals[idx]);
+    si_->getStateSpace()->copyFromReals(tgi.xstate, dreals);
+    base::State *dstate = tgi.xstate;
 
     if (si_->equalStates(nmotion->state, dstate))
         return TRAPPED;
 
-
-    if(!validMotionCheck(tgi.start,nmotion->state,dstate)){
-
+    if (!validMotionCheck(tgi.start, nmotion->state, dstate))
         return TRAPPED;
-    }
-
-    auto newCost = opt_->motionCost(nmotion->state,dstate);
-
-    // cost > 1.0 means the motion changes more than one group; otherwise the transition
-    // already affects a single group and needs no isolation
-    if(newCost.value() > 1.0){
-
-        if(useIsolation_)
-        {
-            std::vector<ompl::base::State *> dstates;
-            std::vector<double> s1,s2;
-            si_->getStateSpace()->copyToReals(s1,nmotion->state);
-            si_->getStateSpace()->copyToReals(s2,dstate);
-            std::vector<int> g1 = getChangedGroups(s1,s2);
-            buildIsoStates(nmotion->state,dstate,g1,dstates);
-
-            std::vector<Motion *> stack_motion;
-            if (dstates.size() == 0) { // nothing could be isolated
-                return TRAPPED;
-            }
-
-            Motion *premotion = nmotion;
-            for (auto st: dstates) { 
-                auto *motion = new Motion(si_);
-                createNewMotion(st, premotion,motion);
-                stack_motion.push_back(motion);
-                premotion = motion;
-            }
-
-            for (auto const &mot_: stack_motion) { // add motions at the end only if states could be isolated, only if loop passed without trapped
-                tree->add(mot_);
-                incCost = opt_->combineCosts(incCost, base::Cost(1.0));
-            }
-            freeStates(dstates);
-
-            tgi.xmotion = stack_motion.back();
-
-            return reach ? REACHED : ADVANCED;
-        }
-        return TRAPPED;
-    }
 
     incCost = opt_->combineCosts(incCost, opt_->motionCost(nmotion->state, dstate));
-    auto * motion = new Motion(si_);
-    createNewMotion(dstate,nmotion,motion);
+    auto *motion = new Motion(si_);
+    createNewMotion(dstate, nmotion, motion);
     tree->add(motion);
     tgi.xmotion = motion;
 
+    /* REACHED only once the sample is matched on every factor: this was the last
+       remaining differing factor and it was completed in a single step. */
+    const bool reach = (frac >= 1.0 && diff.size() == 1);
     return reach ? REACHED : ADVANCED;
 }
 

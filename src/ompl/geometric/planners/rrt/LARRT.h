@@ -176,13 +176,6 @@ namespace ompl
                 RealVectorStateSpace (not only a FragmentedStateSpace). */
             double groupDistance(const base::State *a, const base::State *b) const;
 
-            /** \brief Interpolate one group at a time (in group order), so an extension moves
-                a single group's dimensions before starting the next -- the factored motion
-                primitive, expressed here via the group indices rather than delegated to the
-                state space's interpolate(). */
-            void fragmentedInterpolate(const base::State *from, const base::State *to, double t,
-                                       base::State *state) const;
-
             /** \brief Grow a tree towards a random state */
             GrowState growTree(TreeData &tree, TreeGrowingInfo &tgi, Motion *rmotion);
 
