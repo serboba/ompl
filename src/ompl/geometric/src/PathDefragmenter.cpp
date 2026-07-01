@@ -2,6 +2,7 @@
 
 #include <ompl/geometric/PathDefragmenter.h>
 #include <ompl/base/objectives/MinimalActionsObjective.h>
+#include <algorithm>
 
 ompl::geometric::PathDefragmenter::PathDefragmenter(base::SpaceInformationPtr si,
                                                     std::vector<std::vector<int>> fragment_indices, int goalIndex,
@@ -54,6 +55,66 @@ void ompl::geometric::PathDefragmenter::isolateStates(const base::State* rfrom, 
 
     std::vector<int> groups = getChangedGroups(from_,to_);
     buildIsoStates(from_,to_,groups,iso_);
+}
+
+
+// Isolate the multi-group motion from->to into a chain of single-group steps, moving one
+// group at a time and collision-checking every step. The group order matters: moving group
+// A before B may collide where B-before-A does not, so we try orderings until one is fully
+// collision-free. Returns the intermediate states to insert (all but the final, which equals
+// `to` and is already present in the path); returns false if no ordering is collision-free.
+//
+// This is deliberately backend-agnostic: it works on any state space (a plain
+// RealVectorStateSpace as well as a FragmentedStateSpace) because the factoring is expressed
+// here via the group indices, not delegated to the space's interpolate().
+bool ompl::geometric::PathDefragmenter::isolateChecked(const base::State *from, const base::State *to,
+                                                       std::vector<base::State *> &out)
+{
+    std::vector<double> fromV, toV;
+    si_->getStateSpace()->copyToReals(fromV, from);
+    si_->getStateSpace()->copyToReals(toV, to);
+
+    std::vector<int> order = getChangedGroups(fromV, toV);   // ascending group indices
+    if (order.empty())
+        return false;
+
+    // getChangedGroups returns the groups sorted, so next_permutation enumerates all of
+    // them. Cap the factorial cost: for many simultaneously-changing groups just try the
+    // natural order (such motions are rare and usually already collision-free).
+    const bool tryAllOrders = order.size() <= 4;
+    do
+    {
+        std::vector<double> cur = fromV;
+        const base::State *prev = from;
+        std::vector<base::State *> chain;
+        bool ok = true;
+        for (int g : order)
+        {
+            for (int idx : fragment_indices.at(g))
+                cur[idx] = toV[idx];
+            base::State *s = si_->allocState();
+            si_->getStateSpace()->copyFromReals(s, cur);
+            if (!si_->checkMotion(prev, s))
+            {
+                si_->freeState(s);
+                ok = false;
+                break;
+            }
+            chain.push_back(s);
+            prev = s;
+        }
+        if (ok && !chain.empty())
+        {
+            si_->freeState(chain.back());   // == to, already in the path
+            chain.pop_back();
+            out = chain;
+            return true;
+        }
+        for (base::State *s : chain)
+            si_->freeState(s);
+    } while (tryAllOrders && std::next_permutation(order.begin(), order.end()));
+
+    return false;
 }
 
 
@@ -532,22 +593,31 @@ void ompl::geometric::PathDefragmenter::startPathDefrag(std::vector<ompl::base::
 void ompl::geometric::PathDefragmenter::checkRepairPath(std::vector<ompl::base::State *> &path_)
 {
 
-    for(size_t i = 0; i < path_.size()-1; i++)
+    for(size_t i = 0; i + 1 < path_.size(); )
     {
-        if(si_->equalStates(path_.at(i),path_.at(i+1))){  // equal states may be added somewhere else (outside growstate, i couldnt find where)
-            path_.erase(path_.begin()+i);
+        if(si_->equalStates(path_.at(i),path_.at(i+1)))
+        {
+            // Drop the duplicate (keep path_[i] so the start state is never removed).
+            si_->freeState(path_.at(i+1));
+            path_.erase(path_.begin()+i+1);
+            continue;
         }
 
-        if(opt_->motionCost(path_.at(i),path_.at(i+1)).value()> 1.0) // path defrag needs every state with motion cost 1.0
+        if(opt_->motionCost(path_.at(i),path_.at(i+1)).value()> 1.0) // path defrag needs every edge to have motion cost 1.0
         {
+            // Split the multi-group edge into collision-free single-group steps. If no
+            // ordering is collision-free, keep the (planner-validated) combined edge rather
+            // than inserting a colliding isolated path -- so checkRepairPath never makes the
+            // path collide, on any state space.
             std::vector<ompl::base::State *> iso_;
-            isolateStates(path_.at(i),path_.at(i+1),iso_);
-            bool check = true;
-            if(check){
+            if(isolateChecked(path_.at(i),path_.at(i+1),iso_) && !iso_.empty())
+            {
                 path_.insert(path_.begin()+i+1,iso_.begin(),iso_.end());
-                //(todo/further improvement)check collision if yes new interpolate?/replan sub path?
+                i += iso_.size() + 1;
+                continue;
             }
         }
+        ++i;
     }
 }
 
@@ -596,10 +666,9 @@ void ompl::geometric::PathDefragmenter::doPathDefragComplete(std::vector<ompl::b
 
     std::vector<ompl::base::State *> snapshot = clonePath(path_);   // last known-valid path
 
-    // The baseline we fall back to must itself be valid. checkRepairPath() isolates
-    // multi-group edges without an explicit collision check, so warn (rather than
-    // silently return a bad path) in the -- in practice unreachable, since interpolate()
-    // already moves group-by-group -- case where it produced a colliding baseline.
+    // The baseline we fall back to must itself be valid. checkRepairPath() now isolates
+    // multi-group edges with per-step collision checking, so this should not fire; keep it
+    // as a backstop that warns (rather than silently returning a bad path) if it ever does.
     if(!isPathValid(snapshot, startState_, goalState_))
         OMPL_WARN("PathDefragmenter: path is not collision-free after repair; "
                   "defragmentation may return an invalid path");

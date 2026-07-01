@@ -88,6 +88,23 @@ base::SpaceInformationPtr makeSI(int dim, const std::vector<std::vector<int>> &g
     return si;
 }
 
+// A plain RealVectorStateSpace (NOT a FragmentedStateSpace) -- used to prove the
+// defragmenter's factoring is backend-agnostic.
+base::SpaceInformationPtr makePlainSI(int dim, double low, double high,
+                                      const base::StateValidityCheckerFn &vc)
+{
+    auto space = std::make_shared<base::RealVectorStateSpace>(dim);
+    base::RealVectorBounds b(dim);
+    b.setLow(low);
+    b.setHigh(high);
+    space->setBounds(b);
+    auto si = std::make_shared<base::SpaceInformation>(space);
+    si->setStateValidityChecker(vc);
+    si->setStateValidityCheckingResolution(0.001);
+    si->setup();
+    return si;
+}
+
 std::vector<base::State *> buildPath(const base::SpaceInformationPtr &si,
                                      const std::vector<std::vector<double>> &pts)
 {
@@ -213,5 +230,38 @@ BOOST_AUTO_TEST_CASE(DetourNotStraightenedThroughObstacle)
     checkDefrag(si, groups,
                 {{2, 5, 0, 0}, {2, 2, 0, 0}, {8, 2, 0, 0}, {8, 5, 0, 0}, {8, 5, 1, 0}},
                 {2, 5, 0, 0}, {8, 5, 1, 0});
+    g_obstacles.clear();
+}
+
+// checkRepairPath must isolate a multi-group edge collision-free on a PLAIN
+// RealVectorStateSpace (no FragmentedStateSpace, no group-by-group interpolate).
+// Here moving group 0 first (x then y) drives through an obstacle at the (5,0)
+// corner, while moving group 1 first (y then x) is clear -- so isolation must pick
+// the collision-free ordering rather than blindly splitting x-first.
+BOOST_AUTO_TEST_CASE(IsolationPicksCollisionFreeOrderOnPlainSpace)
+{
+    g_obstacles = {{4.0, 6.0, -1.0, 1.0}};   // blocks the x-first corner (5,0)
+    auto si = makePlainSI(2, -2.0, 12.0, [](const base::State *state) {
+        const auto *s = state->as<base::RealVectorStateSpace::StateType>();
+        return pointFree(s->values[0], s->values[1]);
+    });
+    std::vector<std::vector<int>> groups = {{0}, {1}};
+
+    // one edge (0,0) -> (5,5) changing BOTH groups (motion cost 2)
+    auto path = buildPath(si, {{0, 0}, {5, 5}});
+    BOOST_REQUIRE(si->checkMotion(path.front(), path.back()));   // combined diagonal is free
+
+    geometric::PathDefragmenter pd(si, groups, 0);
+    BOOST_REQUIRE_NO_THROW(pd.checkRepairPath(path));
+
+    // isolated into 3 states, every single-group step collision-free, endpoints kept
+    BOOST_REQUIRE_EQUAL(path.size(), 3u);
+    BOOST_CHECK(collisionFree(si, path));
+    BOOST_CHECK(atConfig(si, path.front(), {0, 0}));
+    BOOST_CHECK(atConfig(si, path.back(), {5, 5}));
+    // the y-first waypoint is (0,5); the colliding x-first waypoint (5,0) must NOT appear
+    BOOST_CHECK(atConfig(si, path.at(1), {0, 5}));
+
+    freePath(si, path);
     g_obstacles.clear();
 }

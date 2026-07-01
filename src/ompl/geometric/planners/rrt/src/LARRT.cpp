@@ -38,6 +38,7 @@
 #include "ompl/base/goals/GoalSampleableRegion.h"
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/util/String.h"
+#include <cmath>
 
 ompl::geometric::LARRT::LARRT(const base::SpaceInformationPtr &si, std::vector<std::vector<int>> gr_indices,
                               bool useIsolation, int goalIndex)
@@ -169,6 +170,70 @@ std::vector<int> ompl::geometric::LARRT::getChangedGroups(const std::vector<doub
 }
 
 
+double ompl::geometric::LARRT::groupDistance(const base::State *a, const base::State *b) const
+{
+    std::vector<double> va, vb;
+    si_->getStateSpace()->copyToReals(va, a);
+    si_->getStateSpace()->copyToReals(vb, b);
+    double d = 0.0;
+    for (auto const &group : group_indices)
+        for (int idx : group)
+            d += std::abs(va[idx] - vb[idx]);
+    return d;
+}
+
+void ompl::geometric::LARRT::fragmentedInterpolate(const base::State *from, const base::State *to, double t,
+                                                   base::State *state) const
+{
+    std::vector<double> f, tv;
+    si_->getStateSpace()->copyToReals(f, from);
+    si_->getStateSpace()->copyToReals(tv, to);
+    std::vector<double> s = f;
+
+    if (t >= 1.0)
+    {
+        s = tv;
+    }
+    else
+    {
+        // normalized share of the total L1 distance carried by each group
+        std::vector<double> gd(group_indices.size(), 0.0);
+        double total = 0.0;
+        for (size_t g = 0; g < group_indices.size(); ++g)
+        {
+            for (int idx : group_indices.at(g))
+                gd[g] += std::abs(f[idx] - tv[idx]);
+            total += gd[g];
+        }
+        for (auto &x : gd)
+            x = (total > 1e-10 && !std::isnan(total)) ? x / total : 0.0;
+
+        // the group in which parameter t currently falls
+        size_t index = group_indices.empty() ? 0 : group_indices.size() - 1;
+        double sum = 0.0;
+        for (size_t g = 0; g < group_indices.size(); ++g)
+        {
+            sum += gd[g];
+            if (sum >= t) { index = g; break; }
+        }
+
+        double dInterp = 0.0;
+        for (size_t g = 0; g < index; ++g)   // groups before: fully at `to`
+        {
+            for (int idx : group_indices.at(g))
+                s[idx] = tv[idx];
+            dInterp += gd[g];
+        }
+        double frac = (std::abs(gd[index]) > 1e-10) ? (t - dInterp) / gd[index] : 0.0;
+        for (int idx : group_indices.at(index))   // the active group: partial
+            s[idx] = f[idx] + frac * (tv[idx] - f[idx]);
+        for (size_t g = index + 1; g < group_indices.size(); ++g)   // groups after: at `from`
+            for (int idx : group_indices.at(g))
+                s[idx] = f[idx];
+    }
+    si_->getStateSpace()->copyFromReals(state, s);
+}
+
 void ompl::geometric::LARRT::createNewMotion(const base::State *st, ompl::geometric::LARRT::Motion *premotion,
                                              ompl::geometric::LARRT::Motion *newmotion){
     si_->copyState(newmotion->state, st);
@@ -261,9 +326,10 @@ ompl::geometric::LARRT::GrowState ompl::geometric::LARRT::growTree(TreeData &tre
     bool reach = true;
     /* find state to add */
     base::State *dstate = rmotion->state;
-    double d = si_->distance(nmotion->state, rmotion->state);
-    // interpolate by maxDistance_ (not maxDistance_ / d) so a step is taken even for distant samples
-    si_->getStateSpace()->interpolate(nmotion->state, rmotion->state, maxDistance_, tgi.xstate);
+    double d = groupDistance(nmotion->state, rmotion->state);
+    // interpolate by maxDistance_ (not maxDistance_ / d) so a step is taken even for distant
+    // samples; group-wise so the factored motion primitive does not depend on the state space
+    fragmentedInterpolate(nmotion->state, rmotion->state, maxDistance_, tgi.xstate);
 
     if (si_->equalStates(nmotion->state, tgi.xstate))
         return TRAPPED;

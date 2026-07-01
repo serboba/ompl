@@ -125,6 +125,12 @@ namespace ompl
             void
             isolateStates(const base::State *rfrom, const base::State *rto, std::vector<ompl::base::State *> &iso_);
 
+            /** \brief Collision-checked isolation of a multi-group edge into single-group
+                steps, trying group orderings; returns the states to insert (excluding the
+                final one, which equals \e to), or false if no ordering is collision-free. */
+            bool isolateChecked(const base::State *from, const base::State *to,
+                                std::vector<base::State *> &out);
+
             std::vector<int> getChangedGroups(const std::vector<double> &from_, const std::vector<double> &to_);
 
             void
