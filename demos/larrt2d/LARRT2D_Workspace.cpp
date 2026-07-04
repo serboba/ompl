@@ -57,7 +57,7 @@
 #include <cmath>
 
 #include <ompl/base/SpaceInformation.h>
-#include <ompl/base/spaces/FragmentedStateSpace.h>
+#include <ompl/base/spaces/FactoredStateSpace.h>
 #include <ompl/geometric/planners/rrt/LARRT.h>
 #include <ompl/base/objectives/MinimalActionsObjective.h>
 #include <ompl/geometric/SimpleSetup.h>
@@ -102,7 +102,7 @@ static constexpr double PUCK_CLEAR = 0.7;   // min centre-to-centre distance
 
 static bool isStateValid(const ob::State *state)
 {
-    const auto *s = state->as<ob::FragmentedStateSpace::StateType>();
+    const auto *s = state->as<ob::FactoredStateSpace::StateType>();
     const double ax = s->values[0], ay = s->values[1];   // puck A
     const double bx = s->values[2], by = s->values[3];   // puck B
     if (!pointFree(ax, ay) || !pointFree(bx, by))
@@ -184,7 +184,7 @@ int main(int /*argc*/, char ** /*argv*/)
     const std::vector<double> startExp = {1.0, 5.0, 5.0, 1.0};
     const std::vector<double> goalExp = {9.0, 5.0, 5.0, 9.0};
 
-    auto space = std::make_shared<ob::FragmentedStateSpace>(groups);
+    auto space = std::make_shared<ob::FactoredStateSpace>(groups);
     space->addDimension(0.0, 10.0);   // puck A x
     space->addDimension(0.0, 10.0);   // puck A y
     space->addDimension(0.0, 10.0);   // puck B x

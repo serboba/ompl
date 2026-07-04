@@ -46,11 +46,46 @@ namespace ompl
 {
     namespace geometric
     {
+        /** \brief Optional capability a goal region may implement so LA-RRT can perform a
+            goal-BIASED projection onto the goal manifold. Given a state \e from, projectToGoal
+            writes into \e out the goal-region member that keeps every free (non-target)
+            dimension of \e from unchanged and pins the target dimension(s) to their goal. When
+            the goal exposes this, LA-RRT occasionally tries to connect a freshly-grown start-tree
+            node straight to its projection, which yields minimal free-object motion. The sampled
+            goal tree is retained as a fallback so probabilistic completeness is preserved (the
+            goal set is measure-zero in the target dims -- an unbiased sampler reaches it with
+            probability 0). See demos/larrt2d/GOAL_REGION_AND_COMPLETENESS.md. */
+        class GoalProjection
+        {
+        public:
+            virtual ~GoalProjection() = default;
+            /** \brief Write the projection of \e from onto the goal manifold into \e out
+                (targets pinned to goal, free dims copied from \e from). Return false if no
+                projection exists. */
+            virtual bool projectToGoal(const ompl::base::State *from, ompl::base::State *out) const = 0;
+        };
+
+        /** \brief Optional geometry-aware single-object motion connector. When the cheap
+            straight-line extension of an object is blocked, LA-RRT delegates "route object g from
+            its pose in \e fromFull to the g-pose in \e targetReals, with the other objects held at
+            their poses in \e fromFull" to this. The implementation lives with the scene geometry
+            (e.g. the driver), so it can reuse a persistent per-object roadmap over the static world
+            and re-validate against the (few) movable objects lazily -- see
+            demos/larrt2d/TWO_LEVEL_DESIGN.md. On success it fills \e waypoints with the intermediate
+            full states (excluding \e fromFull; ownership transfers to LA-RRT) and returns true. */
+        class FactorConnector
+        {
+        public:
+            virtual ~FactorConnector() = default;
+            virtual bool connect(const ompl::base::State *fromFull, const std::vector<double> &targetReals,
+                                 int g, std::vector<ompl::base::State *> &waypoints) = 0;
+        };
+
         /**
            @anchor gLARRT
            @par Short description
            LA-RRT (Low-Actions RRT) is a bidirectional RRT for rearrangement-style problems posed
-           over a fragmented (factored) state space, where the full state is partitioned into
+           over a factored state space, where the full state is partitioned into
            independent groups of indices (one group per movable object / degree of freedom). Rather
            than minimizing geometric path length, LA-RRT minimizes the number of actions, i.e. the
            number of mode switches between groups along the path (see MinimalActionsObjective). As
@@ -96,6 +131,15 @@ namespace ompl
             double getRange() const
             {
                 return maxDistance_;
+            }
+
+            /** \brief Install a geometry-aware single-object motion connector (see FactorConnector).
+                When set, growTree uses it to route an object around obstacles if its straight-line
+                extension is blocked. Pass nullptr (default) to disable -- behaviour is then unchanged.
+                LA-RRT does not take ownership; \e c must outlive solve(). */
+            void setFactorConnector(FactorConnector *c)
+            {
+                factorConnector_ = c;
             }
 
             /** \brief Set a different nearest neighbors datastructure */
@@ -173,7 +217,7 @@ namespace ompl
 
             /** \brief L1 distance summed over the group dimensions. LA-RRT uses this instead
                 of the state space's own metric so its factored search behaves the same on any
-                RealVectorStateSpace (not only a FragmentedStateSpace). */
+                RealVectorStateSpace (not only a FactoredStateSpace). */
             double groupDistance(const base::State *a, const base::State *b) const;
 
             /** \brief Grow a tree towards a random state */
@@ -197,6 +241,15 @@ namespace ompl
 
             /** \brief The maximum length of a motion to be added to a tree */
             double maxDistance_{0.};
+
+            /** \brief Probability, per iteration, of attempting a goal-biased projection of a
+                freshly-grown start-tree node onto the goal manifold (only when the goal
+                implements GoalProjection). Must stay > 0 to preserve probabilistic completeness. */
+            double goalBias_{0.05};
+
+            /** \brief Optional single-object motion connector (not owned). When non-null, growTree
+                uses it to route an object around obstacles if its straight-line extension is blocked. */
+            FactorConnector *factorConnector_{nullptr};
 
             /** \brief Flag indicating whether intermediate states are added to the built tree of motions */
             bool useIsolation_;

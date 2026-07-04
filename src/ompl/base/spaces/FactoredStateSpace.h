@@ -34,8 +34,8 @@
 
 /* Author: Servet Bora Bayraktar */
 
-#ifndef OMPL_BASE_SPACES_FRAGMENTED_STATE_SPACE_H
-#define OMPL_BASE_SPACES_FRAGMENTED_STATE_SPACE_H
+#ifndef OMPL_BASE_SPACES_FACTORED_STATE_SPACE_H
+#define OMPL_BASE_SPACES_FACTORED_STATE_SPACE_H
 
 #include <ompl/base/spaces/RealVectorStateSpace.h>
 
@@ -47,15 +47,15 @@ namespace ompl
             groups ("fragments"/"factors"), one per movable object. Distance and interpolation
             operate group-by-group so that motions traverse a single group at a time, which lets
             LARRT reason about actions (per-group changes) rather than raw Euclidean distance. */
-        class FragmentedStateSpace : public ompl::base::RealVectorStateSpace
+        class FactoredStateSpace : public ompl::base::RealVectorStateSpace
         {
         public:
 
-           FragmentedStateSpace(std::vector<std::vector<int>> groups_) :
+           FactoredStateSpace(std::vector<std::vector<int>> groups_) :
                 grouped_indices(groups_)
             {}
 
-            virtual ~FragmentedStateSpace() = default;
+            virtual ~FactoredStateSpace() = default;
 
 
 
@@ -64,20 +64,31 @@ namespace ompl
             void interpolate(const ompl::base::State *from, const ompl::base::State *to, double t,
                              ompl::base::State *state) const override;
 
+            /** \brief Mark dimension \e index as an angular (SO(2)) DOF, e.g. a revolute joint.
+                Its distance uses the shortest arc over 2*pi and its interpolation follows that arc,
+                rather than treating the angle as a linear translation. Non-marked dimensions stay
+                linear. */
+            void markAngleDim(unsigned int index);
+
+            /** \brief Whether dimension \e index is an angular (SO(2)) DOF. */
+            bool isAngleDim(unsigned int index) const;
+
         private:
-            double distance(double v1, double v2) const;
+            /** \brief Per-dimension distance: shortest angular arc if the dim is angular, else |diff|. */
+            double dimDistance(unsigned int index, double v1, double v2) const;
 
             int findIndex(std::vector<double> &distances, double t) const;
 
-            std::vector<double> getDistances(const FragmentedStateSpace::StateType *const rfrom,
-                                             const FragmentedStateSpace::StateType *const rto) const;
+            std::vector<double> getDistances(const FactoredStateSpace::StateType *const rfrom,
+                                             const FactoredStateSpace::StateType *const rto) const;
 
 
         protected:
             std::vector<std::vector<int>> grouped_indices;
+            std::vector<bool> angleDim_;   ///< true for dimensions that are angular (SO(2))
         };
     }
 }
 
 
-#endif  // OMPL_BASE_SPACES_FRAGMENTED_STATE_SPACE_H
+#endif  // OMPL_BASE_SPACES_FACTORED_STATE_SPACE_H

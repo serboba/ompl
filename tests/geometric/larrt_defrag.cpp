@@ -35,7 +35,7 @@
 /* Author: Servet Bora Bayraktar */
 
 // Regression tests for the LA-RRT PathDefragmenter. Each test feeds a hand-crafted
-// fragmented path (consecutive states differ in a single group) to
+// factored path (consecutive states differ in a single group) to
 // doPathDefragComplete and asserts the three invariants the defragmenter must keep:
 //   * it never crashes,
 //   * the returned path still starts at the start and ends at the goal,
@@ -51,7 +51,7 @@
 #include <cmath>
 
 #include "ompl/base/SpaceInformation.h"
-#include "ompl/base/spaces/FragmentedStateSpace.h"
+#include "ompl/base/spaces/FactoredStateSpace.h"
 #include "ompl/geometric/PathDefragmenter.h"
 
 using namespace ompl;
@@ -78,7 +78,7 @@ bool pointFree(double x, double y)
 base::SpaceInformationPtr makeSI(int dim, const std::vector<std::vector<int>> &groups,
                                  const base::StateValidityCheckerFn &vc)
 {
-    auto space = std::make_shared<base::FragmentedStateSpace>(groups);
+    auto space = std::make_shared<base::FactoredStateSpace>(groups);
     for (int d = 0; d < dim; ++d)
         space->addDimension(0.0, 10.0);
     auto si = std::make_shared<base::SpaceInformation>(space);
@@ -88,7 +88,7 @@ base::SpaceInformationPtr makeSI(int dim, const std::vector<std::vector<int>> &g
     return si;
 }
 
-// A plain RealVectorStateSpace (NOT a FragmentedStateSpace) -- used to prove the
+// A plain RealVectorStateSpace (NOT a FactoredStateSpace) -- used to prove the
 // defragmenter's factoring is backend-agnostic.
 base::SpaceInformationPtr makePlainSI(int dim, double low, double high,
                                       const base::StateValidityCheckerFn &vc)
@@ -223,7 +223,7 @@ BOOST_AUTO_TEST_CASE(DetourNotStraightenedThroughObstacle)
     g_obstacles = {{4.0, 6.0, 4.0, 6.0}};   // central box on the straight A=(2,5)->(8,5) line
     std::vector<std::vector<int>> groups = {{0, 1}, {2, 3}};
     auto si = makeSI(4, groups, [](const base::State *state) {
-        const auto *s = state->as<base::FragmentedStateSpace::StateType>();
+        const auto *s = state->as<base::FactoredStateSpace::StateType>();
         return pointFree(s->values[0], s->values[1]) && pointFree(s->values[2], s->values[3]);
     });
     // object A detours low around the box (a single A-fragment of 3 edges), then object B moves.
@@ -234,7 +234,7 @@ BOOST_AUTO_TEST_CASE(DetourNotStraightenedThroughObstacle)
 }
 
 // checkRepairPath must isolate a multi-group edge collision-free on a PLAIN
-// RealVectorStateSpace (no FragmentedStateSpace, no group-by-group interpolate).
+// RealVectorStateSpace (no FactoredStateSpace, no group-by-group interpolate).
 // Here moving group 0 first (x then y) drives through an obstacle at the (5,0)
 // corner, while moving group 1 first (y then x) is clear -- so isolation must pick
 // the collision-free ordering rather than blindly splitting x-first.

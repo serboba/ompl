@@ -1,0 +1,210 @@
+{
+  "name": "three_alcoves",
+  "world": {
+    "xmin": 0.0,
+    "xmax": 12.0,
+    "ymin": 0.0,
+    "ymax": 5.0
+  },
+  "obstacles": [
+    {
+      "xmin": 0.0,
+      "xmax": 12.0,
+      "ymin": 0.0,
+      "ymax": 0.5
+    },
+    {
+      "xmin": 0.0,
+      "xmax": 0.5,
+      "ymin": 0.0,
+      "ymax": 5.0
+    },
+    {
+      "xmin": 11.5,
+      "xmax": 12.0,
+      "ymin": 0.0,
+      "ymax": 5.0
+    },
+    {
+      "xmin": 0.5,
+      "xmax": 2.0,
+      "ymin": 2.5,
+      "ymax": 3.0
+    },
+    {
+      "xmin": 4.0,
+      "xmax": 5.0,
+      "ymin": 2.5,
+      "ymax": 3.0
+    },
+    {
+      "xmin": 7.0,
+      "xmax": 8.0,
+      "ymin": 2.5,
+      "ymax": 3.0
+    },
+    {
+      "xmin": 10.0,
+      "xmax": 11.5,
+      "ymin": 2.5,
+      "ymax": 3.0
+    },
+    {
+      "xmin": 1.5,
+      "xmax": 2.0,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 4.0,
+      "xmax": 4.5,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 1.5,
+      "xmax": 4.5,
+      "ymin": 4.5,
+      "ymax": 5.0
+    },
+    {
+      "xmin": 4.5,
+      "xmax": 5.0,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 7.0,
+      "xmax": 7.5,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 4.5,
+      "xmax": 7.5,
+      "ymin": 4.5,
+      "ymax": 5.0
+    },
+    {
+      "xmin": 7.5,
+      "xmax": 8.0,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 10.0,
+      "xmax": 10.5,
+      "ymin": 3.0,
+      "ymax": 4.5
+    },
+    {
+      "xmin": 7.5,
+      "xmax": 10.5,
+      "ymin": 4.5,
+      "ymax": 5.0
+    }
+  ],
+  "objects": [
+    {
+      "name": "A",
+      "hx": 0.4,
+      "hy": 0.4,
+      "rotates": false,
+      "start": [
+        1.0,
+        1.5,
+        0.0
+      ],
+      "goal": [
+        11.0,
+        1.5,
+        0.0
+      ],
+      "xbounds": [
+        0.9,
+        11.1
+      ],
+      "ybounds": [
+        0.9,
+        3.9
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "target": true
+    },
+    {
+      "name": "B",
+      "hx": 0.4,
+      "hy": 0.4,
+      "rotates": false,
+      "start": [
+        3.0,
+        1.5,
+        0.0
+      ],
+      "xbounds": [
+        0.9,
+        11.1
+      ],
+      "ybounds": [
+        0.9,
+        3.9
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "target": false
+    },
+    {
+      "name": "C",
+      "hx": 0.4,
+      "hy": 0.4,
+      "rotates": false,
+      "start": [
+        6.0,
+        1.5,
+        0.0
+      ],
+      "xbounds": [
+        0.9,
+        11.1
+      ],
+      "ybounds": [
+        0.9,
+        3.9
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "target": false
+    },
+    {
+      "name": "D",
+      "hx": 0.4,
+      "hy": 0.4,
+      "rotates": false,
+      "start": [
+        9.0,
+        1.5,
+        0.0
+      ],
+      "xbounds": [
+        0.9,
+        11.1
+      ],
+      "ybounds": [
+        0.9,
+        3.9
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "target": false
+    }
+  ]
+}

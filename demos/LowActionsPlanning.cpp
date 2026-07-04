@@ -34,14 +34,14 @@
 
 /* Author: Servet Bora Bayraktar */
 
-// Minimal LA-RRT demo: a 3-dimensional fragmented state space with three single-index
+// Minimal LA-RRT demo: a 3-dimensional factored state space with three single-index
 // groups (objects). Each object must reach its goal value; LARRT minimizes the number of
 // actions (per-object moves) needed to rearrange all three from start to goal.
 
 #include <iostream>
 
 #include <ompl/base/SpaceInformation.h>
-#include <ompl/base/spaces/FragmentedStateSpace.h>
+#include <ompl/base/spaces/FactoredStateSpace.h>
 #include <ompl/geometric/planners/rrt/LARRT.h>
 #include <ompl/base/objectives/MinimalActionsObjective.h>
 #include <ompl/geometric/SimpleSetup.h>
@@ -51,7 +51,7 @@ namespace og = ompl::geometric;
 
 
 bool isStateValid(const ob::State *state){
-    const auto *s = state->as<ob::FragmentedStateSpace::StateType>();
+    const auto *s = state->as<ob::FactoredStateSpace::StateType>();
     if(s->values[0] > 0.7 && s->values[0] < 1.1 && s->values[1] < 0.6){
         return false;
     }else if(s->values[0] > 1.3 && s->values[0] < 1.8 && s->values[2] > -0.5){
@@ -67,7 +67,7 @@ int main (int /*argc*/, char ** /*argv*/){
 
     std::vector<std::vector<int>> groups = {{0}, {1}, {2}};
 
-    auto space = std::make_shared<ob::FragmentedStateSpace>(groups);
+    auto space = std::make_shared<ob::FactoredStateSpace>(groups);
 
     space->addDimension(0.0,2.0);
 

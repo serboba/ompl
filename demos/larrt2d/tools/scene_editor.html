@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LA-RRT 2D Robotics Scene Tool</title>
+<style>
+  :root{
+    --bg:#12151c; --panel:#1b1f2a; --panel2:#232838; --line:#31394d;
+    --ink:#e6e9f0; --muted:#8a93a8; --accent:#4a9eff; --good:#39d98a; --bad:#ff6b6b; --warn:#ffcc4d;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:13px/1.45 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  #app{display:grid;grid-template-columns:1fr 330px;grid-template-rows:auto 1fr auto;height:100%}
+  header{grid-column:1/3;display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+    padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+  header h1{font-size:14px;margin:0 10px 0 0;font-weight:650}
+  .tool,.btn{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;
+    padding:6px 10px;cursor:pointer;font-size:12px}
+  .tool:hover,.btn:hover{border-color:var(--accent)}
+  .tool.active{background:var(--accent);border-color:var(--accent);color:#04101f;font-weight:650}
+  .btn.primary{background:var(--good);border-color:var(--good);color:#03130c;font-weight:650}
+  .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  #stage{grid-column:1;grid-row:2;position:relative;overflow:hidden;background:radial-gradient(circle at 30% 20%,#171b25,#0f1219)}
+  canvas{position:absolute;inset:0;touch-action:none}
+  aside{grid-column:2;grid-row:2;background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:12px}
+  aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:14px 0 8px}
+  aside h2:first-child{margin-top:0}
+  .row{display:flex;gap:6px;align-items:center;margin:5px 0}
+  .row label{width:78px;color:var(--muted);font-size:11px;flex:none}
+  .row input[type=number],.row input[type=text],.row select{flex:1;min-width:0;background:var(--panel2);
+    border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:5px 7px;font-size:12px}
+  .row.two input{width:50%}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .chk{display:flex;align-items:center;gap:7px;margin:6px 0}
+  .list{display:flex;flex-direction:column;gap:3px}
+  .item{display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--line);
+    border-radius:6px;background:var(--panel2);cursor:pointer}
+  .item.sel{border-color:var(--accent);background:#20304a}
+  .item .sw{width:12px;height:12px;border-radius:3px;flex:none}
+  .item .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .del{color:var(--muted);border:0;background:transparent;cursor:pointer;font-size:14px}
+  .item .del:hover{color:var(--bad)}
+  .badge{font-size:10px;padding:1px 6px;border-radius:10px;border:1px solid var(--line);color:var(--muted)}
+  .badge.t{color:var(--warn);border-color:#5a4a1f}
+  .hint{color:var(--muted);font-size:11px;margin:6px 0 0}
+  .val{border-radius:7px;padding:8px 10px;margin-top:8px;font-size:12px;white-space:pre-wrap}
+  .val.ok{background:#0f2a1e;border:1px solid #1f6b47;color:#8ff0c2}
+  .val.err{background:#2a1414;border:1px solid #6b2b2b;color:#ffb3b3}
+  /* jog dock */
+  #dock{grid-column:1/3;grid-row:3;background:var(--panel);border-top:1px solid var(--line);
+    padding:8px 12px;max-height:190px;overflow:auto}
+  #dock .dhead{display:flex;align-items:center;gap:10px;color:var(--muted);
+    font-size:11px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+  .jrow{display:flex;align-items:center;gap:10px;padding:5px 0;border-top:1px solid #232a38}
+  .jrow .sw{width:11px;height:11px;border-radius:3px;flex:none}
+  .jrow .jn{width:120px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .jrow input[type=range]{flex:1;accent-color:var(--accent)}
+  .jrow .jv{width:150px;flex:none;font:12px ui-monospace,Menlo,monospace;text-align:right}
+  .jrow .jv.hit{color:var(--bad)}
+  .jrow .jv.ok{color:var(--good)}
+  .jrow .mini{border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:5px;
+    padding:3px 7px;font-size:11px;cursor:pointer}
+  .jrow .mini:hover{border-color:var(--accent)}
+  kbd{background:#0d1017;border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:11px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>LA-RRT 2D Scene Tool</h1>
+    <button class="tool active" data-tool="select">Select</button>
+    <button class="tool" data-tool="wall">+ Wall</button>
+    <button class="tool" data-tool="box">+ Box</button>
+    <button class="tool" data-tool="door">+ Door</button>
+    <button class="tool" data-tool="revolute">+ Revolute</button>
+    <button class="tool" data-tool="slider">+ Slider</button>
+    <span class="sep"></span>
+    <span class="pill" style="display:inline-flex;gap:2px;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:2px" id="poseToggle" title="Which authored pose the handles edit (targets only)">
+      <button data-pose="start" class="on" style="border:0;background:var(--accent);color:#04101f;font-weight:650;padding:4px 12px;border-radius:18px;cursor:pointer;font-size:12px">Start</button>
+      <button data-pose="goal" style="border:0;background:transparent;color:var(--muted);padding:4px 12px;border-radius:18px;cursor:pointer;font-size:12px">Goal</button>
+    </span>
+    <span class="sep"></span>
+    <button class="btn" id="btnImport">Import…</button>
+    <button class="btn primary" id="btnExport">Export JSON</button>
+    <input type="file" id="file" accept=".json" hidden>
+  </header>
+
+  <div id="stage"><canvas id="cv"></canvas></div>
+
+  <aside>
+    <h2>World</h2>
+    <div class="row"><label>name</label><input id="w_name" type="text" value="my_scene"></div>
+    <div class="row two"><label>x min / max</label><input id="w_xmin" type="number" step="0.1" value="0"><input id="w_xmax" type="number" step="0.1" value="10"></div>
+    <div class="row two"><label>y min / max</label><input id="w_ymin" type="number" step="0.1" value="0"><input id="w_ymax" type="number" step="0.1" value="6"></div>
+    <div class="chk"><input id="w_border" type="checkbox" checked><label for="w_border" style="width:auto;color:var(--ink)">auto border walls on export</label></div>
+
+    <h2>Objects</h2>
+    <div class="list" id="objList"></div>
+    <div id="props"></div>
+
+    <h2>Validate</h2>
+    <button class="btn" id="btnCheck" style="width:100%">Check scene (SAT + pinned joints)</button>
+    <div id="valOut"></div>
+    <p class="hint">Full-range joint sweep flags a <b>pinned</b> joint that can't leave its start — the door_easy trap.</p>
+  </aside>
+
+  <div id="dock">
+    <div class="dhead"><span>Joint jog — drag to test (preview only, does not change authored start/goal)</span></div>
+    <div id="jogRows"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+// =================================================================== model
+// object = rigid body ({hx,hy}) + joint. joint.type in {free, revolute, prismatic}.
+//  free:      pose (x,y,theta) directly.                       (a box / cube)
+//  revolute:  centre = anchor + R(q)*com ; theta = q.          (door = com=(hx,0))
+//  prismatic: centre = anchor + q*axisUnit + com ; theta=angle (slider)
+const S = {
+  name:"my_scene", world:{xmin:0,xmax:10,ymin:0,ymax:6}, border:true,
+  walls:[], objects:[], tool:"select", pose:"start", sel:null,
+};
+const COLORS=["#4a9eff","#39d98a","#ffcc4d","#ff6b6b","#c77dff","#4dd0e1","#ff9f66","#a0e060"];
+const objColor=i=>COLORS[i%COLORS.length];
+let nextId=1;
+const TAU=2*Math.PI, D2R=Math.PI/180, R2D=180/Math.PI;
+
+function insetBounds(hx,hy){ const bt=S.border?0.3:0;
+  return { x:[+(S.world.xmin+bt+hx).toFixed(2),+(S.world.xmax-bt-hx).toFixed(2)],
+           y:[+(S.world.ymin+bt+hy).toFixed(2),+(S.world.ymax-bt-hy).toFixed(2)] }; }
+
+function newFree(x,y){const hx=0.35,hy=0.35;return{name:"box"+(nextId++),target:false,rotates:false,
+  body:{hx,hy}, joint:{type:"free",startPose:{x,y,theta:0},goalPose:{x:x+2,y,theta:0},
+  bounds:insetBounds(hx,hy),tbounds:[-Math.PI,Math.PI]}};}
+function newDoor(x,y){const L=2.85,W=0.3;return{name:"door"+(nextId++),target:false,
+  body:{hx:L/2,hy:W/2},
+  joint:{type:"revolute",anchor:{x,y},com:{x:L/2,y:0},limits:[-Math.PI,Math.PI],
+  qStart:Math.PI/2,qGoal:0,qJog:null}};}
+function newRevolute(x,y){const hx=0.7,hy=0.18;return{name:"lever"+(nextId++),target:false,
+  body:{hx,hy}, // anchor at a short-edge end (like a handle); com places body relative to anchor
+  joint:{type:"revolute",anchor:{x,y},com:{x:hx,y:0},limits:[-Math.PI,Math.PI],
+  qStart:0,qGoal:Math.PI/2,qJog:null}};}
+function newSlider(x,y){const hx=0.4,hy=0.4;return{name:"slider"+(nextId++),target:false,
+  body:{hx,hy},
+  joint:{type:"prismatic",anchor:{x,y},com:{x:0,y:0},axis:{x:1,y:0},angle:0,
+  limits:[0,3],qStart:0,qGoal:2,qJog:null}};}
+
+const artic=o=>o.joint.type==="revolute"||o.joint.type==="prismatic";
+
+// forward kinematics -> OBB {cx,cy,hx,hy,th}. mode: 'start'|'goal'|'jog'
+function bodyOBB(o,mode){
+  const j=o.joint,b=o.body;
+  if(j.type==="free"){ const p=(mode==="goal")?j.goalPose:j.startPose;
+    return {cx:p.x,cy:p.y,hx:b.hx,hy:b.hy,th:o.rotates?p.theta:j.startPose.theta}; }
+  let q = mode==="goal"?j.qGoal : mode==="jog"?j.qJog : j.qStart;
+  if(q==null) q=j.qStart;
+  if(j.type==="revolute"){ const c=Math.cos(q),s=Math.sin(q);
+    return {cx:j.anchor.x+c*j.com.x-s*j.com.y, cy:j.anchor.y+s*j.com.x+c*j.com.y, hx:b.hx,hy:b.hy,th:q}; }
+  const n=Math.hypot(j.axis.x,j.axis.y)||1,ux=j.axis.x/n,uy=j.axis.y/n;
+  return {cx:j.anchor.x+q*ux+j.com.x, cy:j.anchor.y+q*uy+j.com.y, hx:b.hx,hy:b.hy,th:j.angle};
+}
+// 9 key points of a body OBB (corners, edge mids, centre) in world coords
+function keyPoints(ob){
+  const c=Math.cos(ob.th),s=Math.sin(ob.th),pts=[];
+  for(const [ex,ey] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1],[0,0]]){
+    const lx=ex*ob.hx,ly=ey*ob.hy; pts.push([ob.cx+c*lx-s*ly, ob.cy+s*lx+c*ly]);
+  } return pts;
+}
+
+// ================================================================ OBB + SAT
+const EPS=1e-6;
+function corners(o){const c=Math.cos(o.th),s=Math.sin(o.th),out=[];
+  for(const [sx,sy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){const lx=sx*o.hx,ly=sy*o.hy;
+    out.push([o.cx+c*lx-s*ly,o.cy+s*lx+c*ly]);} return out;}
+function overlap(a,b){
+  const axes=[[Math.cos(a.th),Math.sin(a.th)],[-Math.sin(a.th),Math.cos(a.th)],
+              [Math.cos(b.th),Math.sin(b.th)],[-Math.sin(b.th),Math.cos(b.th)]];
+  const ca=corners(a),cb=corners(b);
+  for(const [ax,ay] of axes){let mnA=1e9,mxA=-1e9,mnB=1e9,mxB=-1e9;
+    for(const [x,y] of ca){const p=x*ax+y*ay;mnA=Math.min(mnA,p);mxA=Math.max(mxA,p);}
+    for(const [x,y] of cb){const p=x*ax+y*ay;mnB=Math.min(mnB,p);mxB=Math.max(mxB,p);}
+    if(mxA<=mnB+EPS||mxB<=mnA+EPS) return false;}
+  return true;}
+function wallOBB(w){return{cx:(w.xmin+w.xmax)/2,cy:(w.ymin+w.ymax)/2,hx:(w.xmax-w.xmin)/2,hy:(w.ymax-w.ymin)/2,th:0};}
+function borderWalls(){const {xmin,xmax,ymin,ymax}=S.world,t=0.3;
+  return [{xmin,xmax,ymin,ymax:ymin+t},{xmin,xmax,ymin:ymax-t,ymax},
+          {xmin,xmax:xmin+t,ymin,ymax},{xmin:xmax-t,xmax,ymin,ymax}];}
+function allWallOBBs(){return (S.border?borderWalls():[]).concat(S.walls).map(wallOBB);}
+// collision of one object's OBB against walls + every OTHER object at its start pose
+function collides(ob,skipIdx){
+  for(const w of allWallOBBs()) if(overlap(ob,w)) return true;
+  for(let k=0;k<S.objects.length;k++){ if(k===skipIdx) continue;
+    if(overlap(ob,bodyOBB(S.objects[k],"start"))) return true; }
+  return false;
+}
+
+// ==================================================================== view
+const cv=document.getElementById("cv"),ctx=cv.getContext("2d"),stage=document.getElementById("stage");
+let scale=50,ox=40,oy=40;
+function fit(){const r=stage.getBoundingClientRect();cv.width=r.width;cv.height=r.height;
+  const m=40,W=S.world.xmax-S.world.xmin,H=S.world.ymax-S.world.ymin;
+  scale=Math.min((cv.width-2*m)/W,(cv.height-2*m)/H);
+  ox=(cv.width-W*scale)/2-S.world.xmin*scale; oy=(cv.height+H*scale)/2+S.world.ymin*scale; draw();}
+const WX=x=>ox+x*scale, WY=y=>oy-y*scale, PX=px=>(px-ox)/scale, PY=py=>(oy-py)/scale;
+const round=v=>Math.round(v*100)/100;
+
+function drawOBB(o,fill,stroke,dashed,lw){const c=corners(o);ctx.beginPath();
+  ctx.moveTo(WX(c[0][0]),WY(c[0][1])); for(const [x,y] of [c[1],c[3],c[2]]) ctx.lineTo(WX(x),WY(y));
+  ctx.closePath(); ctx.setLineDash(dashed?[6,4]:[]);
+  if(fill){ctx.fillStyle=fill;ctx.fill();} if(stroke){ctx.lineWidth=lw||2;ctx.strokeStyle=stroke;ctx.stroke();}
+  ctx.setLineDash([]);}
+function dot(x,y,r,col){ctx.beginPath();ctx.arc(WX(x),WY(y),r,0,TAU);ctx.fillStyle=col;ctx.fill();
+  ctx.lineWidth=1.5;ctx.strokeStyle="#0b0e14";ctx.stroke();}
+
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.lineWidth=1;ctx.strokeStyle="#1e2530";
+  for(let x=Math.ceil(S.world.xmin);x<=S.world.xmax;x++){ctx.beginPath();ctx.moveTo(WX(x),WY(S.world.ymin));ctx.lineTo(WX(x),WY(S.world.ymax));ctx.stroke();}
+  for(let y=Math.ceil(S.world.ymin);y<=S.world.ymax;y++){ctx.beginPath();ctx.moveTo(WX(S.world.xmin),WY(y));ctx.lineTo(WX(S.world.xmax),WY(y));ctx.stroke();}
+  ctx.strokeStyle="#39435a";ctx.lineWidth=1.5;
+  ctx.strokeRect(WX(S.world.xmin),WY(S.world.ymax),(S.world.xmax-S.world.xmin)*scale,(S.world.ymax-S.world.ymin)*scale);
+  if(S.border) for(const w of borderWalls()) drawOBB(wallOBB(w),"rgba(120,130,150,0.18)",null,false);
+  S.walls.forEach((w,i)=>{const sc=S.sel&&S.sel.type==="wall"&&S.sel.i===i;
+    drawOBB(wallOBB(w), sc?"rgba(120,140,180,0.55)":"rgba(90,100,120,0.55)", sc?"#4a9eff":"#5a6478",false);});
+
+  S.objects.forEach((o,i)=>{
+    const col=objColor(i), sc=S.sel&&S.sel.type==="obj"&&S.sel.i===i, j=o.joint;
+    // swept reachable range for the selected articulated joint
+    if(sc&&artic(o)) drawSweep(o,i,col);
+    if(o.target){ drawOBB(bodyOBB(o,"goal"),null,col,true); }
+    const jogging=artic(o)&&j.qJog!=null;
+    if(jogging){ drawOBB(bodyOBB(o,"start"),null,col+"66",false,1);          // faint start ghost
+      const jb=bodyOBB(o,"jog"),hit=collides(jb,i);
+      drawOBB(jb, hit?"rgba(255,107,107,0.30)":"rgba(57,217,138,0.25)", hit?"#ff6b6b":"#39d98a", false, 2.5);
+    } else { drawOBB(bodyOBB(o,"start"), col+"33", sc?"#fff":col, false); }
+    // joint decorations + handles
+    if(j.type==="revolute"){
+      const ob=bodyOBB(o, jogging?"jog":"start");
+      ctx.strokeStyle=col+"88";ctx.lineWidth=1.2;ctx.beginPath();
+      ctx.moveTo(WX(j.anchor.x),WY(j.anchor.y));ctx.lineTo(WX(ob.cx),WY(ob.cy));ctx.stroke();
+      dot(j.anchor.x,j.anchor.y,5,"#fff");                 // white = hinge (re-place)
+      if(sc){ const t=revTip(o, jogging?"start":(o.target&&S.pose==="goal"?"goal":"start"));
+        ctx.beginPath();ctx.arc(WX(t.x),WY(t.y),7,0,TAU);ctx.strokeStyle=col;ctx.lineWidth=2;ctx.stroke();
+        ctx.beginPath();ctx.arc(WX(t.x),WY(t.y),2.5,0,TAU);ctx.fillStyle=col;ctx.fill(); }  // ring = rotate
+    } else if(j.type==="prismatic"){
+      const n=Math.hypot(j.axis.x,j.axis.y)||1,ux=j.axis.x/n,uy=j.axis.y/n;
+      const p0={x:j.anchor.x+j.limits[0]*ux+j.com.x,y:j.anchor.y+j.limits[0]*uy+j.com.y};
+      const p1={x:j.anchor.x+j.limits[1]*ux+j.com.x,y:j.anchor.y+j.limits[1]*uy+j.com.y};
+      ctx.setLineDash([3,4]);ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();
+      ctx.moveTo(WX(p0.x),WY(p0.y));ctx.lineTo(WX(p1.x),WY(p1.y));ctx.stroke();ctx.setLineDash([]);
+      dot(j.anchor.x,j.anchor.y,5,"#fff"); if(sc) dot(p1.x,p1.y,4,col);
+    } else if(sc){ const p=o.rotates? (S.pose==="goal"?o.joint.goalPose:o.joint.startPose):o.joint.startPose;
+      dot(p.x,p.y,4,"#fff"); }
+    ctx.fillStyle="#e6e9f0";ctx.font="11px ui-sans-serif";const lb=bodyOBB(o,"start");
+    ctx.fillText(o.name+(o.target?" ◯goal":""),WX(lb.cx)+6,WY(lb.cy)-6);
+  });
+}
+// translucent fan/band of the joint's reachable extent; blocked poses drawn red
+function drawSweep(o,i,col){ const j=o.joint,N=28;
+  for(let k=0;k<=N;k++){ const q=j.limits[0]+(j.limits[1]-j.limits[0])*k/N;
+    const save=j.qJog; j.qJog=q; const ob=bodyOBB(o,"jog"); j.qJog=save;
+    const hit=collides(ob,i);
+    drawOBB(ob,null, hit?"rgba(255,107,107,0.10)":"rgba(74,158,255,0.07)",false,1);
+  }
+}
+
+// ================================================================ picking
+function hitObject(wx,wy){const pad=7/scale, pt={cx:wx,cy:wy,hx:pad,hy:pad,th:0}; // pad => thin doors are grabbable
+  for(let i=S.objects.length-1;i>=0;i--){ const o=S.objects[i];
+    if(overlap(bodyOBB(o,"start"),pt)) return i;
+    if(o.target&&overlap(bodyOBB(o,"goal"),pt)) return i; }
+  return -1;}
+// far-end point of a revolute body (opposite the anchor) — the rotate grip
+function revTip(o,mode){ const j=o.joint,q=(mode==="goal")?j.qGoal:j.qStart,c=Math.cos(q),s=Math.sin(q);
+  return {x:j.anchor.x+2*(c*j.com.x-s*j.com.y), y:j.anchor.y+2*(s*j.com.x+c*j.com.y)}; }
+function hitWall(wx,wy){for(let i=S.walls.length-1;i>=0;i--){const w=S.walls[i];
+  if(wx>=w.xmin&&wx<=w.xmax&&wy>=w.ymin&&wy<=w.ymax) return i;} return -1;}
+const nearPx=(x,y,wx,wy)=>Math.hypot(WX(x)-WX(wx),WY(y)-WY(wy))<11;
+function handleAt(o,wx,wy){ const j=o.joint, mode=(o.target&&S.pose==="goal")?"goal":"start";
+  if(j.type==="revolute"){ if(nearPx(j.anchor.x,j.anchor.y,wx,wy)) return "anchor";
+    const t=revTip(o,mode); if(nearPx(t.x,t.y,wx,wy)) return "spin";   // ring at far end = rotate
+    return "translate"; }                                             // body = move the whole door
+  if(j.type==="prismatic"){ const n=Math.hypot(j.axis.x,j.axis.y)||1,ux=j.axis.x/n,uy=j.axis.y/n;
+    if(nearPx(j.anchor.x,j.anchor.y,wx,wy)) return "anchor";
+    if(nearPx(j.anchor.x+j.limits[1]*ux+j.com.x, j.anchor.y+j.limits[1]*uy+j.com.y, wx,wy)) return "axis";
+    return "translate"; }                                            // body = move the whole rail
+  return "body";
+}
+// snap a dragged anchor to the body's 9 key points (returns snapped {x,y})
+function snapAnchor(o,wx,wy){ let best=null,bd=12/scale;
+  for(const [px,py] of keyPoints(bodyOBB(o,"start"))){ const d=Math.hypot(px-wx,py-wy);
+    if(d<bd){bd=d;best=[px,py];} }
+  return best?{x:best[0],y:best[1]}:{x:round(wx),y:round(wy)}; }
+
+// ================================================================== mouse
+let drag=null;
+cv.addEventListener("pointerdown",e=>{
+  cv.setPointerCapture(e.pointerId);
+  const r=cv.getBoundingClientRect(),wx=PX(e.clientX-r.left),wy=PY(e.clientY-r.top);
+  const add=(o)=>{S.objects.push(o);S.sel={type:"obj",i:S.objects.length-1};S.tool="select";syncTools();sync();};
+  if(S.tool==="wall"){drag={mode:"newwall",x0:wx,y0:wy,x1:wx,y1:wy};return;}
+  if(S.tool==="box")     return add(newFree(round(wx),round(wy)));
+  if(S.tool==="door")    return add(newDoor(round(wx),round(wy)));
+  if(S.tool==="revolute")return add(newRevolute(round(wx),round(wy)));
+  if(S.tool==="slider")  return add(newSlider(round(wx),round(wy)));
+  const oi=hitObject(wx,wy);
+  if(oi>=0){S.sel={type:"obj",i:oi};const o=S.objects[oi],h=handleAt(o,wx,wy);
+    const d={mode:"obj",h};
+    if(h==="translate"){d.offx=o.joint.anchor.x-wx;d.offy=o.joint.anchor.y-wy;}  // grab offset for rigid move
+    drag=d;sync();return;}
+  const wi=hitWall(wx,wy);
+  if(wi>=0){const w=S.walls[wi];S.sel={type:"wall",i:wi};drag={mode:"wall",dx:wx-w.xmin,dy:wy-w.ymin};sync();return;}
+  S.sel=null;sync();
+});
+cv.addEventListener("pointermove",e=>{
+  if(!drag) return;
+  const r=cv.getBoundingClientRect(),wx=PX(e.clientX-r.left),wy=PY(e.clientY-r.top);
+  if(drag.mode==="newwall"){drag.x1=wx;drag.y1=wy;draw();previewWall(drag);return;}
+  if(drag.mode==="wall"){const w=S.walls[S.sel.i],ww=w.xmax-w.xmin,hh=w.ymax-w.ymin;
+    w.xmin=round(wx-drag.dx);w.ymin=round(wy-drag.dy);w.xmax=w.xmin+ww;w.ymax=w.ymin+hh;draw();refreshProps();return;}
+  if(drag.mode==="obj"){ const o=S.objects[S.sel.i],j=o.joint,editGoal=o.target&&S.pose==="goal";
+    if(j.type==="free"){ const p=editGoal?j.goalPose:j.startPose; p.x=round(wx);p.y=round(wy); }
+    else if(j.type==="revolute"){
+      if(drag.h==="translate"){ // rigid move: slide the whole door, angle unchanged
+        j.anchor.x=round(wx+drag.offx); j.anchor.y=round(wy+drag.offy);
+      } else if(drag.h==="anchor"){ // re-place the hinge, keep the body where it is (recompute com)
+        const mode=editGoal?"goal":"start", ob=bodyOBB(o,mode), q=editGoal?j.qGoal:j.qStart;
+        const a=snapAnchor(o,wx,wy); j.anchor.x=a.x; j.anchor.y=a.y;
+        const dx=ob.cx-a.x,dy=ob.cy-a.y,c=Math.cos(q),s=Math.sin(q);
+        j.com.x=round(c*dx+s*dy); j.com.y=round(-s*dx+c*dy);   // com = R(-q)*(centre-anchor)
+      } else { // spin: drag the far-end ring to set the joint angle
+        const q=Math.atan2(wy-j.anchor.y,wx-j.anchor.x)-Math.atan2(j.com.y,j.com.x);
+        const qq=Math.atan2(Math.sin(q),Math.cos(q));
+        if(editGoal) j.qGoal=qq; else j.qStart=qq;
+      }
+    } else { // prismatic
+      const n=Math.hypot(j.axis.x,j.axis.y)||1,ux=j.axis.x/n,uy=j.axis.y/n;
+      if(drag.h==="translate"){ // rigid move: slide the whole rail+block
+        j.anchor.x=round(wx+drag.offx); j.anchor.y=round(wy+drag.offy);
+      } else if(drag.h==="anchor"){ const a=snapAnchor(o,wx,wy);
+        const mode=editGoal?"goal":"start",ob=bodyOBB(o,mode),q=editGoal?j.qGoal:j.qStart;
+        j.anchor.x=a.x;j.anchor.y=a.y; j.com.x=round(ob.cx-a.x-q*ux); j.com.y=round(ob.cy-a.y-q*uy); }
+      else { let ax=wx-j.anchor.x-j.com.x, ay=wy-j.anchor.y-j.com.y;   // axis end: set direction + length
+        const L=Math.hypot(ax,ay)||1; j.axis.x=round(ax/L); j.axis.y=round(ay/L);
+        j.angle=Math.atan2(j.axis.y,j.axis.x); j.limits[1]=Math.max(0.2,round(L)); }
+    }
+    draw();refreshProps();return;}
+});
+cv.addEventListener("pointerup",()=>{
+  if(drag&&drag.mode==="newwall"){const w={xmin:round(Math.min(drag.x0,drag.x1)),xmax:round(Math.max(drag.x0,drag.x1)),
+    ymin:round(Math.min(drag.y0,drag.y1)),ymax:round(Math.max(drag.y0,drag.y1))};
+    if(w.xmax-w.xmin>0.05&&w.ymax-w.ymin>0.05){S.walls.push(w);S.sel={type:"wall",i:S.walls.length-1};}
+    S.tool="select";syncTools();}
+  drag=null;sync();});
+function previewWall(d){ctx.setLineDash([5,4]);ctx.strokeStyle="#4a9eff";ctx.lineWidth=1.5;
+  ctx.strokeRect(WX(Math.min(d.x0,d.x1)),WY(Math.max(d.y0,d.y1)),Math.abs(d.x1-d.x0)*scale,Math.abs(d.y1-d.y0)*scale);ctx.setLineDash([]);}
+
+// ============================================================ props panel
+const propsEl=document.getElementById("props");
+function refreshProps(){renderProps();renderList();renderJog();}
+function bindNum(el,get,set){el.oninput=()=>{set(parseFloat(el.value)||0);draw();};}
+function renderProps(){
+  propsEl.innerHTML="";
+  if(!S.sel){propsEl.innerHTML='<p class="hint">Nothing selected. Add with a <b>+</b> tool, then click an object: <b>drag its body to move it</b>, drag the coloured <b>ring</b> to rotate a joint, drag the <b>white dot</b> to re-place the hinge/anchor. Jog joints in the dock below.</p>';return;}
+  if(S.sel.type==="wall"){const w=S.walls[S.sel.i];
+    propsEl.innerHTML=`<h2>Wall</h2>
+    <div class="row two"><label>x min/max</label><input data-w="xmin" type="number" step="0.1" value="${w.xmin}"><input data-w="xmax" type="number" step="0.1" value="${w.xmax}"></div>
+    <div class="row two"><label>y min/max</label><input data-w="ymin" type="number" step="0.1" value="${w.ymin}"><input data-w="ymax" type="number" step="0.1" value="${w.ymax}"></div>
+    <button class="btn" id="delW" style="width:100%;margin-top:6px">Delete wall</button>`;
+    propsEl.querySelectorAll("[data-w]").forEach(inp=>inp.oninput=()=>{w[inp.dataset.w]=parseFloat(inp.value)||0;draw();});
+    propsEl.querySelector("#delW").onclick=()=>{S.walls.splice(S.sel.i,1);S.sel=null;sync();};return;}
+  const o=S.objects[S.sel.i],j=o.joint;
+  let h=`<h2>${j.type} — ${o.name}</h2>
+    <div class="row"><label>name</label><input data-o="name" type="text" value="${o.name}"></div>
+    <div class="chk"><input data-o="target" type="checkbox" ${o.target?"checked":""}><span>target (must reach goal)</span></div>
+    <div class="row two"><label>body hx/hy</label><input data-b="hx" type="number" step="0.05" value="${o.body.hx}"><input data-b="hy" type="number" step="0.05" value="${o.body.hy}"></div>`;
+  if(j.type==="free"){
+    h+=`<div class="chk"><input data-o="rotates" type="checkbox" ${o.rotates?"checked":""}><span>rotates (θ free)</span></div>
+    <h2>Start pose</h2><div class="row two"><label>x / y</label><input data-p="startPose.x" type="number" step="0.1" value="${j.startPose.x}"><input data-p="startPose.y" type="number" step="0.1" value="${j.startPose.y}"></div>
+    <div class="row"><label>θ</label><input data-p="startPose.theta" type="number" step="0.05" value="${j.startPose.theta}"></div>`;
+    if(o.target) h+=`<h2>Goal pose</h2><div class="row two"><label>x / y</label><input data-p="goalPose.x" type="number" step="0.1" value="${j.goalPose.x}"><input data-p="goalPose.y" type="number" step="0.1" value="${j.goalPose.y}"></div>
+    <div class="row"><label>θ</label><input data-p="goalPose.theta" type="number" step="0.05" value="${j.goalPose.theta}"></div>`;
+    h+=`<h2>Bounds (sampling)</h2><div class="row two"><label>x lo/hi</label><input data-bn="bounds.x.0" type="number" step="0.1" value="${j.bounds.x[0]}"><input data-bn="bounds.x.1" type="number" step="0.1" value="${j.bounds.x[1]}"></div>
+    <div class="row two"><label>y lo/hi</label><input data-bn="bounds.y.0" type="number" step="0.1" value="${j.bounds.y[0]}"><input data-bn="bounds.y.1" type="number" step="0.1" value="${j.bounds.y[1]}"></div>`;
+  } else if(j.type==="revolute"){
+    h+=`<h2>Revolute joint</h2>
+    <div class="row two"><label>anchor x/y</label><input data-p="anchor.x" type="number" step="0.05" value="${j.anchor.x}"><input data-p="anchor.y" type="number" step="0.05" value="${j.anchor.y}"></div>
+    <div class="row two"><label>com x/y</label><input data-p="com.x" type="number" step="0.05" value="${j.com.x}"><input data-p="com.y" type="number" step="0.05" value="${j.com.y}"></div>
+    <div class="row"><label>start angle</label><input data-p="qStart" type="number" step="0.05" value="${j.qStart}"></div>`;
+    if(o.target) h+=`<div class="row"><label>goal angle</label><input data-p="qGoal" type="number" step="0.05" value="${j.qGoal}"></div>`;
+    h+=`<div class="row two"><label>limit lo/hi</label><input data-bn="limits.0" type="number" step="0.05" value="${j.limits[0]}"><input data-bn="limits.1" type="number" step="0.05" value="${j.limits[1]}"></div>
+    <p class="hint"><b>Drag the body</b> to move the whole door · <b>drag the coloured ring</b> (far end) to rotate it · <b>drag the white dot</b> to re-place the hinge. Or jog it in the dock below (preview → ▸Start to keep).</p>`;
+  } else {
+    h+=`<h2>Prismatic joint</h2>
+    <div class="row two"><label>anchor x/y</label><input data-p="anchor.x" type="number" step="0.05" value="${j.anchor.x}"><input data-p="anchor.y" type="number" step="0.05" value="${j.anchor.y}"></div>
+    <div class="row two"><label>axis x/y</label><input data-p="axis.x" type="number" step="0.05" value="${j.axis.x}"><input data-p="axis.y" type="number" step="0.05" value="${j.axis.y}"></div>
+    <div class="row"><label>block θ</label><input data-p="angle" type="number" step="0.05" value="${j.angle}"></div>
+    <div class="row"><label>start disp</label><input data-p="qStart" type="number" step="0.05" value="${j.qStart}"></div>`;
+    if(o.target) h+=`<div class="row"><label>goal disp</label><input data-p="qGoal" type="number" step="0.05" value="${j.qGoal}"></div>`;
+    h+=`<div class="row two"><label>disp lo/hi</label><input data-bn="limits.0" type="number" step="0.05" value="${j.limits[0]}"><input data-bn="limits.1" type="number" step="0.05" value="${j.limits[1]}"></div>`;
+  }
+  h+=`<button class="btn" id="delO" style="width:100%;margin-top:10px">Delete object</button>`;
+  propsEl.innerHTML=h;
+  propsEl.querySelectorAll("[data-o]").forEach(inp=>inp.oninput=()=>{const k=inp.dataset.o;
+    o[k]=inp.type==="checkbox"?inp.checked:(inp.type==="text"?inp.value:parseFloat(inp.value)||0);
+    if(k==="target"||k==="rotates") renderProps(); draw();renderList();renderJog();});
+  propsEl.querySelectorAll("[data-b]").forEach(inp=>inp.oninput=()=>{o.body[inp.dataset.b]=parseFloat(inp.value)||0;draw();});
+  propsEl.querySelectorAll("[data-p]").forEach(inp=>inp.oninput=()=>{const parts=inp.dataset.p.split(".");
+    let t=j; for(let k=0;k<parts.length-1;k++) t=t[parts[k]]; t[parts[parts.length-1]]=parseFloat(inp.value)||0;
+    draw();renderJog();});
+  propsEl.querySelectorAll("[data-bn]").forEach(inp=>inp.oninput=()=>{const parts=inp.dataset.bn.split(".");
+    let t=j; for(let k=0;k<parts.length-1;k++) t=t[isNaN(parts[k])?parts[k]:+parts[k]];
+    t[+parts[parts.length-1]]=parseFloat(inp.value)||0; draw();renderJog();});
+  propsEl.querySelector("#delO").onclick=()=>{S.objects.splice(S.sel.i,1);S.sel=null;sync();};
+}
+function renderList(){const el=document.getElementById("objList");el.innerHTML="";
+  S.objects.forEach((o,i)=>{const d=document.createElement("div");
+    d.className="item"+(S.sel&&S.sel.type==="obj"&&S.sel.i===i?" sel":"");
+    d.innerHTML=`<span class="sw" style="background:${objColor(i)}"></span><span class="nm">${o.name}</span>
+      <span class="badge ${o.target?'t':''}">${o.joint.type}${o.target?' ▸goal':''}</span><button class="del">✕</button>`;
+    d.onclick=e=>{if(e.target.classList.contains("del")){S.objects.splice(i,1);S.sel=null;}else S.sel={type:"obj",i};sync();};
+    el.appendChild(d);});}
+
+// ============================================================== jog dock
+function renderJog(){
+  const el=document.getElementById("jogRows"); el.innerHTML="";
+  const arts=S.objects.map((o,i)=>({o,i})).filter(x=>artic(x.o));
+  if(!arts.length){el.innerHTML='<p class="hint">No articulated joints yet. Add a Door, Revolute or Slider.</p>';return;}
+  arts.forEach(({o,i})=>{
+    const j=o.joint, rev=j.type==="revolute", q=(j.qJog!=null?j.qJog:j.qStart);
+    const row=document.createElement("div"); row.className="jrow";
+    const unit=rev?"°":"m", disp=rev?(q*R2D):q;
+    const hit=collides(bodyOBB(o,j.qJog!=null?"jog":"start"),i);
+    row.innerHTML=`<span class="sw" style="background:${objColor(i)}"></span>
+      <span class="jn">${o.name}</span>
+      <input type="range" min="${j.limits[0]}" max="${j.limits[1]}" step="0.005" value="${q}">
+      <span class="jv ${j.qJog!=null?(hit?'hit':'ok'):''}">${disp.toFixed(rev?1:2)}${unit} ${j.qJog!=null?(hit?'✗ collide':'✓ free'):''}</span>
+      <button class="mini" data-a="start">▸Start</button><button class="mini" data-a="goal" ${o.target?'':'disabled style=opacity:.4'}>▸Goal</button>
+      <button class="mini" data-a="reset">reset</button>`;
+    const range=row.querySelector("input"), jv=row.querySelector(".jv");
+    range.oninput=()=>{ j.qJog=parseFloat(range.value); S.sel={type:"obj",i};
+      const h=collides(bodyOBB(o,"jog"),i), dv=rev?(j.qJog*R2D):j.qJog;
+      jv.textContent=`${dv.toFixed(rev?1:2)}${unit} ${h?'✗ collide':'✓ free'}`;
+      jv.className="jv "+(h?"hit":"ok"); draw(); };
+    row.querySelectorAll(".mini").forEach(b=>b.onclick=()=>{const a=b.dataset.a;
+      if(a==="reset"){j.qJog=null;}
+      else{ const val=j.qJog!=null?j.qJog:j.qStart; if(a==="start")j.qStart=round4(val); else j.qGoal=round4(val); j.qJog=null; }
+      refreshProps();draw();});
+    el.appendChild(row);
+  });
+}
+const round4=v=>Math.round(v*1e4)/1e4;
+
+// ============================================================= validation
+function pinSweep(o){ // returns {pinned, lo, hi} reachable interval (containing qStart) in joint units
+  const j=o.joint, i=S.objects.indexOf(o), N=200;
+  const free=q=>{const s=j.qJog;j.qJog=q;const ok=!collides(bodyOBB(o,"jog"),i);j.qJog=s;return ok;};
+  if(!free(j.qStart)) return {pinned:true,lo:j.qStart,hi:j.qStart,invalidStart:true};
+  const step=(j.limits[1]-j.limits[0])/N; let lo=j.qStart,hi=j.qStart;
+  for(let q=j.qStart;q<=j.limits[1]+1e-9;q+=step){ if(free(q)) hi=q; else break; }
+  for(let q=j.qStart;q>=j.limits[0]-1e-9;q-=step){ if(free(q)) lo=q; else break; }
+  const span=hi-lo, thr=(j.type==="revolute")?0.15:0.15;
+  return {pinned:span<thr, lo, hi};
+}
+document.getElementById("btnCheck").onclick=()=>{
+  const probs=[]; const walls=allWallOBBs();
+  // start & goal collision
+  const check=(mode,label)=>{ S.objects.forEach((o,i)=>{ const useMode=o.target?mode:"start";
+    const ob=bodyOBB(o,useMode);
+    for(const w of walls) if(overlap(ob,w)){probs.push(`${label}: ${o.name} overlaps a wall`);break;}
+    for(let k=i+1;k<S.objects.length;k++){ const ok=S.objects[k].target?mode:"start";
+      if(overlap(ob,bodyOBB(S.objects[k],ok))) probs.push(`${label}: ${o.name} overlaps ${S.objects[k].name}`);} }); };
+  check("start","START");
+  if(S.objects.some(o=>o.target)) check("goal","GOAL");
+  // pinned joints (full range sweep)
+  S.objects.filter(artic).forEach(o=>{ const r=pinSweep(o);
+    if(r.invalidStart) probs.push(`⚠ ${o.name}: START pose is already in collision`);
+    else if(r.pinned){ const u=o.joint.type==="revolute"?"°":"", f=o.joint.type==="revolute"?R2D:1;
+      probs.push(`⚠ ${o.name} is PINNED — reachable only ${(r.lo*f).toFixed(1)}${u}…${(r.hi*f).toFixed(1)}${u} from start. Give it clearance.`); } });
+  if(!S.objects.some(o=>o.target)) probs.push("note: no target object — goal is trivially the start.");
+  const el=document.getElementById("valOut"), real=probs.filter(p=>!p.startsWith("note"));
+  if(real.length===0) el.innerHTML=`<div class="val ok">✓ start${S.objects.some(o=>o.target)?" and goal":""} collision-free; every joint has a free range from its start.${probs[0]&&probs[0].startsWith("note")?"\n"+probs[0]:""}</div>`;
+  else el.innerHTML=`<div class="val err">${[...new Set(probs)].join("\n")}</div>`;
+};
+
+// ============================================================ import/export
+function toScene(){
+  const out={name:S.name,world:{...S.world},obstacles:[],objects:[]};
+  if(S.border) for(const w of borderWalls()) out.obstacles.push({xmin:w.xmin,xmax:w.xmax,ymin:w.ymin,ymax:w.ymax});
+  for(const w of S.walls) out.obstacles.push({xmin:w.xmin,xmax:w.xmax,ymin:w.ymin,ymax:w.ymax});
+  for(const o of S.objects){ const j=o.joint;
+    if(j.type==="free"){ const g={name:o.name,type:"box",hx:o.body.hx,hy:o.body.hy,rotates:o.rotates,target:o.target,
+        start:[j.startPose.x,j.startPose.y,j.startPose.theta],
+        xbounds:[...j.bounds.x],ybounds:[...j.bounds.y],
+        tbounds:o.rotates?[...j.tbounds]:[j.startPose.theta,j.startPose.theta]};
+      if(o.target) g.goal=[j.goalPose.x,j.goalPose.y,o.rotates?j.goalPose.theta:j.startPose.theta];
+      out.objects.push(g);
+    } else if(j.type==="revolute"){
+      const doorForm=Math.abs(j.com.y)<1e-6 && Math.abs(j.com.x-o.body.hx)<1e-6;
+      let g;
+      if(doorForm){ g={name:o.name,type:"door",target:o.target,hinge:[j.anchor.x,j.anchor.y],
+        length:2*o.body.hx,width:2*o.body.hy,start_angle:j.qStart,angle_bounds:[...j.limits]};
+        if(o.target) g.goal_angle=j.qGoal; }
+      else { g={name:o.name,type:"revolute",target:o.target,anchor:[j.anchor.x,j.anchor.y],
+        com:[j.com.x,j.com.y],hx:o.body.hx,hy:o.body.hy,start_angle:j.qStart,angle_bounds:[...j.limits]};
+        if(o.target) g.goal_angle=j.qGoal; }
+      out.objects.push(g);
+    } else {
+      const n=Math.hypot(j.axis.x,j.axis.y)||1;
+      const g={name:o.name,type:"slider",target:o.target,base:[j.anchor.x+j.com.x,j.anchor.y+j.com.y],
+        axis:[j.axis.x/n,j.axis.y/n],hx:o.body.hx,hy:o.body.hy,angle:j.angle,
+        start_disp:j.qStart,disp_bounds:[...j.limits]};
+      if(o.target) g.goal_disp=j.qGoal; out.objects.push(g);
+    }
+  }
+  return out;
+}
+function fromScene(jn){
+  S.name=jn.name||"scene"; document.getElementById("w_name").value=S.name;
+  S.world={xmin:+jn.world.xmin,xmax:+jn.world.xmax,ymin:+jn.world.ymin,ymax:+jn.world.ymax};
+  ["xmin","xmax","ymin","ymax"].forEach(k=>document.getElementById("w_"+k).value=S.world[k]);
+  S.walls=[];S.objects=[];S.border=true;
+  const bw=borderWalls(),isB=w=>bw.some(b=>Math.abs(b.xmin-w.xmin)<0.31&&Math.abs(b.xmax-w.xmax)<0.31&&Math.abs(b.ymin-w.ymin)<0.31&&Math.abs(b.ymax-w.ymax)<0.31);
+  for(const w of (jn.obstacles||[])){const ww={xmin:+w.xmin,xmax:+w.xmax,ymin:+w.ymin,ymax:+w.ymax};if(!isB(ww))S.walls.push(ww);}
+  for(const o of (jn.objects||[])){
+    if(o.type==="door"){const L=+o.length,W=+o.width;
+      S.objects.push({name:o.name,target:!!o.target,body:{hx:L/2,hy:W/2},
+        joint:{type:"revolute",anchor:{x:o.hinge[0],y:o.hinge[1]},com:{x:L/2,y:0},
+        limits:[...(o.angle_bounds||[-Math.PI,Math.PI])],qStart:+o.start_angle,
+        qGoal:o.goal_angle!==undefined?+o.goal_angle:0,qJog:null}});}
+    else if(o.type==="revolute"){
+      S.objects.push({name:o.name,target:!!o.target,body:{hx:+o.hx,hy:+o.hy},
+        joint:{type:"revolute",anchor:{x:o.anchor[0],y:o.anchor[1]},com:{x:+o.com[0],y:+o.com[1]},
+        limits:[...(o.angle_bounds||[-Math.PI,Math.PI])],qStart:+o.start_angle,
+        qGoal:o.goal_angle!==undefined?+o.goal_angle:0,qJog:null}});}
+    else if(o.type==="slider"){
+      S.objects.push({name:o.name,target:!!o.target,body:{hx:+o.hx,hy:+o.hy},
+        joint:{type:"prismatic",anchor:{x:o.base[0],y:o.base[1]},com:{x:0,y:0},
+        axis:{x:o.axis[0],y:o.axis[1]},angle:+(o.angle||0),limits:[...o.disp_bounds],
+        qStart:+o.start_disp,qGoal:o.goal_disp!==undefined?+o.goal_disp:0,qJog:null}});}
+    else { const rot=!!o.rotates;
+      S.objects.push({name:o.name,target:!!o.target,rotates:rot,body:{hx:+o.hx,hy:+o.hy},
+        joint:{type:"free",startPose:{x:o.start[0],y:o.start[1],theta:o.start[2]||0},
+        goalPose:o.goal?{x:o.goal[0],y:o.goal[1],theta:o.goal[2]||0}:{x:o.start[0]+2,y:o.start[1],theta:0},
+        bounds:{x:[...(o.xbounds||[S.world.xmin,S.world.xmax])],y:[...(o.ybounds||[S.world.ymin,S.world.ymax])]},
+        tbounds:[...(o.tbounds||[-Math.PI,Math.PI])]}});}
+  }
+  nextId=S.objects.length+1;S.sel=null;fit();sync();
+}
+document.getElementById("btnExport").onclick=()=>{const txt=JSON.stringify(toScene(),null,2);
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"application/json"}));
+  a.download=(S.name||"scene")+".json";a.click(); navigator.clipboard&&navigator.clipboard.writeText(txt).catch(()=>{});};
+document.getElementById("btnImport").onclick=()=>document.getElementById("file").click();
+document.getElementById("file").onchange=e=>{const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();rd.onload=()=>{try{fromScene(JSON.parse(rd.result));}catch(err){alert("Bad JSON: "+err);}};rd.readAsText(f);};
+
+// =============================================================== toolbar
+document.querySelectorAll(".tool").forEach(b=>b.onclick=()=>{S.tool=b.dataset.tool;syncTools();});
+function syncTools(){document.querySelectorAll(".tool").forEach(b=>b.classList.toggle("active",b.dataset.tool===S.tool));}
+document.querySelectorAll("#poseToggle button").forEach(b=>b.onclick=()=>{S.pose=b.dataset.pose;
+  document.querySelectorAll("#poseToggle button").forEach(x=>{const on=x===b;
+    x.style.background=on?"var(--accent)":"transparent";x.style.color=on?"#04101f":"var(--muted)";x.style.fontWeight=on?"650":"400";});draw();});
+document.getElementById("w_name").oninput=e=>{S.name=e.target.value;};
+["xmin","xmax","ymin","ymax"].forEach(k=>document.getElementById("w_"+k).oninput=e=>{S.world[k]=parseFloat(e.target.value)||0;fit();});
+document.getElementById("w_border").onchange=e=>{S.border=e.target.checked;draw();};
+window.addEventListener("resize",fit);
+window.addEventListener("keydown",e=>{if((e.key==="Delete"||e.key==="Backspace")&&S.sel&&document.activeElement.tagName!=="INPUT"){
+  if(S.sel.type==="obj")S.objects.splice(S.sel.i,1);else S.walls.splice(S.sel.i,1);S.sel=null;sync();}});
+function sync(){draw();renderProps();renderList();renderJog();}
+
+// ------- seed: a door + a target box + divider walls (the door_easy scene) ----
+S.objects.push(newDoor(5.35,2.5));
+const bx=newFree(2,4); bx.target=true; bx.joint.goalPose={x:8,y:4,theta:0}; S.objects.push(bx);
+S.walls.push({xmin:4.7,xmax:5.3,ymin:0.3,ymax:2.5},{xmin:4.7,xmax:5.3,ymin:5.5,ymax:5.7});
+fit();sync();
+</script>
+</body>
+</html>

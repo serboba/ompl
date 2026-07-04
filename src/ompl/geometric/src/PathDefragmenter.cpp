@@ -65,7 +65,7 @@ void ompl::geometric::PathDefragmenter::isolateStates(const base::State* rfrom, 
 // `to` and is already present in the path); returns false if no ordering is collision-free.
 //
 // This is deliberately backend-agnostic: it works on any state space (a plain
-// RealVectorStateSpace as well as a FragmentedStateSpace) because the factoring is expressed
+// RealVectorStateSpace as well as a FactoredStateSpace) because the factoring is expressed
 // here via the group indices, not delegated to the space's interpolate().
 bool ompl::geometric::PathDefragmenter::isolateChecked(const base::State *from, const base::State *to,
                                                        std::vector<base::State *> &out)
@@ -218,7 +218,11 @@ void ompl::geometric::PathDefragmenter::findNextFragment(int start_index, int pr
 {
     if(sameFragmentType)
     {
-        for (size_t i = start_index; i < mainPath.size() - 1; i++) {
+        // Bound is size(), not size()-1: the merge fragment may be the path's trailing
+        // fragment, whose last state is the goal state at index size()-1. Excluding it
+        // would truncate that fragment (dropping the goal), so a final-fragment merge
+        // could never succeed and the path kept one redundant action.
+        for (size_t i = start_index; i < mainPath.size(); i++) {
             if (getChangedIndex(mainPath.at(i - 1), mainPath.at(i)) == prev_index) {
 
                 ompl::base::State *xstate = si_->getStateSpace()->allocState();
@@ -690,10 +694,19 @@ void ompl::geometric::PathDefragmenter::doPathDefragComplete(std::vector<ompl::b
         }
     };
 
-    startPathDefrag(path_);          guard();
-    cutOffIfGoalReached(path_);      guard();
-    trySkipFragment(path_);          guard();
-    simplifyActionIntervals(path_);  guard();
+    // Run the whole simplification pipeline repeatedly until the action count no longer
+    // drops: a later stage (e.g. simplifyActionIntervals) can re-enable an earlier one
+    // (e.g. trySkipFragment), so a single pass is not a fixed point. guard() guarantees the
+    // action count is monotone non-increasing, so this loop terminates (cost is bounded below).
+    int prevCost;
+    do
+    {
+        prevCost = getCostPath(path_);
+        startPathDefrag(path_);          guard();
+        cutOffIfGoalReached(path_);      guard();
+        trySkipFragment(path_);          guard();
+        simplifyActionIntervals(path_);  guard();
+    } while (getCostPath(path_) < prevCost);
 
     freeStates(snapshot);
     si_->freeState(startState_); startState_ = nullptr;

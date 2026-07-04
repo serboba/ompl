@@ -38,7 +38,7 @@
 //
 // Two 1-DOF objects, groups = {{0}, {1}}. The full state is (object0, object1),
 // which is directly the 2D CONFIGURATION SPACE: x = position of object 0,
-// y = position of object 1. Because the fragmented state space moves one group
+// y = position of object 1. Because the factored state space moves one group
 // (one object) at a time, every solution segment is axis-aligned: a horizontal
 // move changes object 0, a vertical move changes object 1.
 //
@@ -57,7 +57,7 @@
 #include <cmath>
 
 #include <ompl/base/SpaceInformation.h>
-#include <ompl/base/spaces/FragmentedStateSpace.h>
+#include <ompl/base/spaces/FactoredStateSpace.h>
 #include <ompl/geometric/planners/rrt/LARRT.h>
 #include <ompl/base/objectives/MinimalActionsObjective.h>
 #include <ompl/geometric/SimpleSetup.h>
@@ -88,7 +88,7 @@ static bool pointFree(double x, double y)
 
 static bool isStateValid(const ob::State *state)
 {
-    const auto *s = state->as<ob::FragmentedStateSpace::StateType>();
+    const auto *s = state->as<ob::FactoredStateSpace::StateType>();
     return pointFree(s->values[0], s->values[1]);   // x = object 0, y = object 1
 }
 
@@ -162,7 +162,7 @@ int main(int /*argc*/, char ** /*argv*/)
     const std::vector<double> startExp = {1.0, 5.0};   // object 1 is "ahead"
     const std::vector<double> goalExp = {5.0, 1.0};    // object 0 must end up "ahead"
 
-    auto space = std::make_shared<ob::FragmentedStateSpace>(groups);
+    auto space = std::make_shared<ob::FactoredStateSpace>(groups);
     space->addDimension(0.0, 10.0);   // object 0
     space->addDimension(0.0, 10.0);   // object 1
 

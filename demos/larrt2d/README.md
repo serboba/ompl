@@ -1,8 +1,43 @@
 # LA-RRT 2D rearrangement demos
 
+## Data-driven puzzle pipeline (move-n-times / sequential unlock)
+
+A general 2D pipeline for sequential-rearrangement puzzles where objects block each other
+(move A aside → move B through → move A again). Objects are **oriented rectangles** with SAT
+collision; LA-RRT minimises the number of **actions** (object switches), one group per object.
+Full contract: [`PUZZLE_PIPELINE_SPEC.md`](PUZZLE_PIPELINE_SPEC.md).
+
+```sh
+# 1. build the driver (OMPL lib already built)
+cmake --build build --target demo_LARRT2D_puzzle -j4
+
+# 2. solve a scene  ->  writes demos/larrt2d/out/<name>.json
+./build/demos/demo_LARRT2D_puzzle demos/larrt2d/scenes/corridor_swap.json 10 larrt
+
+# 3. validate independently (own SAT collision code; PASS/FAIL, exit code)
+python3 demos/larrt2d/tools/validate_puzzle.py demos/larrt2d/out/corridor_swap.json
+
+# 4. visualise  ->  <name>.gif + <name>_strip.png (one panel per action)
+python3 demos/larrt2d/viz/viz_puzzle.py demos/larrt2d/out/corridor_swap.json
+
+# 5. benchmark all scenes x planners (LA-RRT is randomized -> multiple runs)
+python3 demos/larrt2d/tools/benchmark.py --runs 5 --time 10
+```
+
+- **Scenes** live in `scenes/*.json` (walls + movable rectangles + per-object start/goal/DOF).
+  Add a scene = drop in a JSON file; no code changes.
+- **Planners**: `larrt` (action-minimizing, single object per action) or `rrtconnect` (baseline).
+  RRTConnect solves fast but moves several objects at once, so its plans **fail validation** —
+  a good illustration of why the factored/action structure matters.
+- Everything is pure 2D (no z), so validation and visualisation are trivial to reason about.
+
+---
+
+# LA-RRT 2D rearrangement demos (original explainers)
+
 Small, runnable 2-D demos of **LA-RRT (LARRT)**, a bidirectional RRT over a
-*fragmented* (factored) state space. The state is partitioned into **groups**,
-one per movable object, and the `FragmentedStateSpace` moves **one group at a
+*factored* (factored) state space. The state is partitioned into **groups**,
+one per movable object, and the `FactoredStateSpace` moves **one group at a
 time**. LA-RRT does not minimise geometric length -- it minimises the number of
 **actions**, i.e. the number of times control switches between objects
 (mode-switches). After a path is found, the `PathDefragmenter` reorders / merges
@@ -95,7 +130,7 @@ Committed under `out/`:
 
 ## What this demonstrates
 
-LA-RRT solves **rearrangement** problems over a **fragmented state space**:
+LA-RRT solves **rearrangement** problems over a **factored state space**:
 the configuration is factored into per-object groups, motions traverse one group
 at a time, and the planner minimises the **number of actions** (object
 switches), not distance. The `PathDefragmenter` post-processes the raw RRT

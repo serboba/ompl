@@ -1,0 +1,30 @@
+{
+  "name": "move_aside",
+  "world": { "xmin": 0.0, "xmax": 12.0, "ymin": 0.0, "ymax": 5.0 },
+  "obstacles": [
+    { "xmin": 0.0,  "xmax": 12.0, "ymin": 0.0, "ymax": 0.5 },
+    { "xmin": 0.0,  "xmax": 0.5,  "ymin": 0.0, "ymax": 5.0 },
+    { "xmin": 11.5, "xmax": 12.0, "ymin": 0.0, "ymax": 5.0 },
+    { "xmin": 0.5,  "xmax": 5.0,  "ymin": 2.5, "ymax": 3.0 },
+    { "xmin": 7.0,  "xmax": 11.5, "ymin": 2.5, "ymax": 3.0 },
+    { "xmin": 4.5,  "xmax": 5.0,  "ymin": 3.0, "ymax": 4.5 },
+    { "xmin": 7.0,  "xmax": 7.5,  "ymin": 3.0, "ymax": 4.5 },
+    { "xmin": 4.5,  "xmax": 7.5,  "ymin": 4.5, "ymax": 5.0 }
+  ],
+  "objects": [
+    { "name": "A", "hx": 0.4, "hy": 0.4, "rotates": false,
+      "start": [2.0, 1.5, 0.0], "goal": [10.0, 1.5, 0.0], "dims": [0, 1, 2] },
+    { "name": "B", "hx": 0.4, "hy": 0.4, "rotates": false,
+      "start": [6.0, 1.5, 0.0], "goal": [6.0, 3.7, 0.0], "dims": [3, 4, 5] }
+  ],
+  "groups": [[0, 1, 2], [3, 4, 5]],
+  "planner": "larrt",
+  "solved": true,
+  "action_count": 2,
+  "solve_time_s": 0.0,
+  "path": [
+    [2.0, 1.5, 0.0, 6.0, 1.5, 0.0],
+    [2.0, 1.5, 0.0, 6.0, 3.7, 0.0],
+    [10.0, 1.5, 0.0, 6.0, 3.7, 0.0]
+  ]
+}

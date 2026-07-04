@@ -44,7 +44,7 @@ namespace ompl
 {
     namespace geometric {
 
-        /** \brief Post-processes an LARRT solution path expressed over a fragmented state space.
+        /** \brief Post-processes an LARRT solution path expressed over a factored state space.
             It reorders and merges consecutive path segments that act on the same group (fragment)
             and skips redundant fragments, reducing the number of actions / mode-switches while
             keeping every motion collision-free. */

@@ -1,0 +1,122 @@
+[
+  {
+    "scene": "corridor_swap",
+    "planner": "larrt",
+    "solved": 3,
+    "runs": 3,
+    "valid": 3,
+    "best": 3,
+    "median": 3,
+    "median_time_s": 6.009
+  },
+  {
+    "scene": "corridor_swap",
+    "planner": "rrtconnect",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 3,
+    "median": 3,
+    "median_time_s": 0.004
+  },
+  {
+    "scene": "corridor_swap",
+    "planner": "rrtstar",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 2,
+    "median": 2,
+    "median_time_s": 6.0
+  },
+  {
+    "scene": "move_aside",
+    "planner": "larrt",
+    "solved": 3,
+    "runs": 3,
+    "valid": 3,
+    "best": 2,
+    "median": 2,
+    "median_time_s": 6.004
+  },
+  {
+    "scene": "move_aside",
+    "planner": "rrtconnect",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 1,
+    "median": 3,
+    "median_time_s": 0.002
+  },
+  {
+    "scene": "move_aside",
+    "planner": "rrtstar",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 1,
+    "median": 1,
+    "median_time_s": 6.001
+  },
+  {
+    "scene": "three_alcoves",
+    "planner": "larrt",
+    "solved": 3,
+    "runs": 3,
+    "valid": 3,
+    "best": 5,
+    "median": 5,
+    "median_time_s": 6.043
+  },
+  {
+    "scene": "three_alcoves",
+    "planner": "rrtconnect",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 3,
+    "median": 3,
+    "median_time_s": 0.087
+  },
+  {
+    "scene": "three_alcoves",
+    "planner": "rrtstar",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 1,
+    "median": 1,
+    "median_time_s": 6.001
+  },
+  {
+    "scene": "two_alcoves",
+    "planner": "larrt",
+    "solved": 3,
+    "runs": 3,
+    "valid": 3,
+    "best": 3,
+    "median": 3,
+    "median_time_s": 6.02
+  },
+  {
+    "scene": "two_alcoves",
+    "planner": "rrtconnect",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 1,
+    "median": 3,
+    "median_time_s": 0.005
+  },
+  {
+    "scene": "two_alcoves",
+    "planner": "rrtstar",
+    "solved": 3,
+    "runs": 3,
+    "valid": 0,
+    "best": 1,
+    "median": 1,
+    "median_time_s": 6.002
+  }
+]

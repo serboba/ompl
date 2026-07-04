@@ -36,9 +36,15 @@
 
 #include "ompl/geometric/planners/rrt/LARRT.h"
 #include "ompl/base/goals/GoalSampleableRegion.h"
+#include "ompl/base/spaces/RealVectorStateSpace.h"
+#include "ompl/base/spaces/FactoredStateSpace.h"
 #include "ompl/tools/config/SelfConfig.h"
 #include "ompl/util/String.h"
 #include <cmath>
+#include <vector>
+#include <fstream>
+#include <cstdlib>
+#include <unordered_map>
 
 ompl::geometric::LARRT::LARRT(const base::SpaceInformationPtr &si, std::vector<std::vector<int>> gr_indices,
                               bool useIsolation, int goalIndex)
@@ -175,10 +181,21 @@ double ompl::geometric::LARRT::groupDistance(const base::State *a, const base::S
     std::vector<double> va, vb;
     si_->getStateSpace()->copyToReals(va, a);
     si_->getStateSpace()->copyToReals(vb, b);
+    // Angular (SO(2)) DOF use the shortest-arc distance; linear DOF use |diff|. If the space is a
+    // FactoredStateSpace it tells us which dims are angular; otherwise everything is linear.
+    const auto *fss = dynamic_cast<const base::FactoredStateSpace *>(si_->getStateSpace().get());
     double d = 0.0;
     for (auto const &group : group_indices)
         for (int idx : group)
-            d += std::abs(va[idx] - vb[idx]);
+        {
+            double diff = std::abs(va[idx] - vb[idx]);
+            if (fss != nullptr && fss->isAngleDim(idx))
+            {
+                diff = std::fmod(diff, 2.0 * M_PI);
+                if (diff > M_PI) diff = 2.0 * M_PI - diff;
+            }
+            d += diff;
+        }
     return d;
 }
 
@@ -279,12 +296,61 @@ ompl::geometric::LARRT::GrowState ompl::geometric::LARRT::growTree(TreeData &tre
     if (diff.empty())
         return TRAPPED;
 
+    // --- diagnostics (LARRT_DBG) : count branch outcomes for the START tree only ----------
+    static bool DBG = std::getenv("LARRT_DBG") != nullptr;
+    static long dCall = 0, dIso = 0, dIsoOK = 0, dSingle = 0, dSingleOK = 0, dDoorPick = 0, dDoorOK = 0;
+    const bool dbgThis = DBG && tgi.start;   // start tree only
+    if (dbgThis)
+    {
+        ++dCall;
+        if ((dCall % 40000) == 0)
+            OMPL_INFORM("DBG start: calls=%ld iso=%ld(ok %ld) single=%ld(ok %ld) doorPick=%ld(ok %ld) useIso=%d range=%.3f",
+                        dCall, dIso, dIsoOK, dSingle, dSingleOK, dDoorPick, dDoorOK, (int)useIsolation_, maxDistance_);
+    }
+
+    /* If several factors differ, ISOLATE the multi-factor extension to the sample into an ordered
+       sequence of single-group steps (buildIsoStates), each collision-checked. This is what lets
+       coupled sequences be discovered -- e.g. "swing the door open, THEN move the target through".
+       The order is shuffled each call so that over iterations every ordering (obstacle-first vs
+       target-first) is tried; buildIsoStates returns empty if the chosen order is blocked. */
+    static bool NO_ISO = std::getenv("LARRT_NO_ISO") != nullptr;
+    if (diff.size() > 1 && useIsolation_ && !NO_ISO)
+    {
+        if (dbgThis) ++dIso;
+        si_->getStateSpace()->copyFromReals(tgi.xstate, rreals);   // full sample as the target
+        std::vector<int> order = diff;
+        for (int i = static_cast<int>(order.size()) - 1; i > 0; --i)   // Fisher-Yates shuffle
+        {
+            int j = rng_.uniformInt(0, i);
+            int tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+        }
+        std::vector<base::State *> dstates;
+        buildIsoStates(nmotion->state, tgi.xstate, order, dstates);
+        if (dstates.empty())
+            return TRAPPED;   // this ordering is blocked; another sample/order may succeed
+
+        Motion *prev = nmotion;
+        for (base::State *st : dstates)
+        {
+            auto *m = new Motion(si_);
+            createNewMotion(st, prev, m);                 // sets parent/root/cost/index(=that group)
+            tree->add(m);
+            incCost = opt_->combineCosts(incCost, base::Cost(1.0));
+            prev = m;
+        }
+        freeStates(dstates);
+        tgi.xmotion = prev;
+        if (dbgThis) ++dIsoOK;
+        return REACHED;   // the full sample (every differing factor) was matched
+    }
+
     /* Advance ONE factor toward the sample, chosen at random among the differing
        factors and range-limited to maxDistance_ within that factor's L1. Picking a
        random factor (rather than always the lowest-index one) is what makes the
        factored search actually explore every object; moving a single factor keeps
        every tree edge at action cost 1 (no isolation needed). */
     int g = diff[rng_.uniformInt(0, static_cast<int>(diff.size()) - 1)];
+    if (dbgThis) { ++dSingle; if (group_indices.at(g).size() == 1) ++dDoorPick; }
     double dg = 0.0;
     for (int idx : group_indices.at(g))
         dg += std::abs(nreals[idx] - rreals[idx]);
@@ -299,14 +365,49 @@ ompl::geometric::LARRT::GrowState ompl::geometric::LARRT::growTree(TreeData &tre
     if (si_->equalStates(nmotion->state, dstate))
         return TRAPPED;
 
+    if (dbgThis && group_indices.at(g).size() == 1 && dDoorPick < 12)
+    {
+        bool ev = si_->isValid(dstate);
+        bool cm = si_->checkMotion(nmotion->state, dstate);
+        OMPL_INFORM("DBG door step: from=%.4f to=%.4f (sample=%.4f) endpointValid=%d checkMotion=%d",
+                    nreals[group_indices.at(g)[0]], dreals[group_indices.at(g)[0]],
+                    rreals[group_indices.at(g)[0]], (int)ev, (int)cm);
+    }
     if (!validMotionCheck(tgi.start, nmotion->state, dstate))
-        return TRAPPED;
+    {
+        // The straight-line move of object g is blocked. Common case: give up (TRAPPED).
+        // If a FactorConnector is installed, instead ask it to route object g AROUND the
+        // obstruction to the sample's g-pose (others held at nmotion). The result is a chain
+        // of same-object edges (still one object per action). See TWO_LEVEL_DESIGN.md.
+        if (factorConnector_ == nullptr)
+            return TRAPPED;
+
+        std::vector<base::State *> wps;
+        if (!factorConnector_->connect(nmotion->state, rreals, g, wps))
+            return TRAPPED;
+
+        Motion *prev = nmotion;
+        for (base::State *ws : wps)
+        {
+            auto *m = new Motion(si_);
+            createNewMotion(ws, prev, m);         // copies ws; sets parent/root/cost/index(=g)
+            si_->freeState(ws);
+            incCost = opt_->combineCosts(incCost, opt_->motionCost(prev->state, m->state));
+            tree->add(m);
+            prev = m;
+        }
+        tgi.xmotion = prev;
+        // g was routed all the way to the sample's g-pose, so if it was the only differing
+        // factor the sample is now matched -> REACHED, else more factors remain -> ADVANCED.
+        return (diff.size() == 1) ? REACHED : ADVANCED;
+    }
 
     incCost = opt_->combineCosts(incCost, opt_->motionCost(nmotion->state, dstate));
     auto *motion = new Motion(si_);
     createNewMotion(dstate, nmotion, motion);
     tree->add(motion);
     tgi.xmotion = motion;
+    if (dbgThis) { ++dSingleOK; if (group_indices.at(g).size() == 1) ++dDoorOK; }
 
     /* REACHED only once the sample is matched on every factor: this was the last
        remaining differing factor and it was completed in a single step. */
@@ -345,6 +446,9 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
 {
     checkValidity();
     auto *goal = dynamic_cast<base::GoalSampleableRegion *>(pdef_->getGoal().get());
+    // Optional: a goal that can project a state onto the goal manifold (targets pinned, free
+    // dims kept) enables the PC-safe goal-biased projection below. Null for ordinary goals.
+    auto *goalProj = dynamic_cast<GoalProjection *>(pdef_->getGoal().get());
 
     if (goal == nullptr)
     {
@@ -376,6 +480,34 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
     if (!sampler_)
         sampler_ = si_->allocStateSampler();
 
+    if (std::getenv("LARRT_SELFTEST"))
+    {
+        // Swing the door with every other object HELD at the start, find first invalid angle.
+        base::State *a = si_->allocState();
+        base::State *b = si_->allocState();
+        std::vector<double> sv;
+        si_->getStateSpace()->copyToReals(sv, tStart_->size() ? [&]{ std::vector<Motion*> m; tStart_->list(m); return m[0]->state; }() : a);
+        const int doorIdx = static_cast<int>(sv.size()) - 1;   // door is last dim in door_easy
+        OMPL_INFORM("SELFTEST start reals: A=(%.3f,%.3f) door=%.4f  startValid=%d",
+                    sv[0], sv[1], sv[doorIdx], (int)([&]{ si_->getStateSpace()->copyFromReals(a, sv); return si_->isValid(a); }()));
+        double prev = sv[doorIdx];
+        for (double ang = sv[doorIdx]; ang >= -3.14159; ang -= 0.01)
+        {
+            std::vector<double> w = sv; w[doorIdx] = ang;
+            si_->getStateSpace()->copyFromReals(b, w);
+            std::vector<double> w0 = sv; w0[doorIdx] = prev;
+            si_->getStateSpace()->copyFromReals(a, w0);
+            bool ev = si_->isValid(b), cm = si_->checkMotion(a, b);
+            if (!ev || !cm)
+            {
+                OMPL_INFORM("SELFTEST swing DOWN first failure at door=%.4f (endpointValid=%d stepMotion=%d)", ang, (int)ev, (int)cm);
+                break;
+            }
+            prev = ang;
+        }
+        si_->freeState(a); si_->freeState(b);
+    }
+
     OMPL_INFORM("%s: Starting planning with %d states already in datastructure", getName().c_str(),
                 (int)(tStart_->size() + tGoal_->size()));
 
@@ -386,6 +518,7 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
     double approxdif = std::numeric_limits<double>::infinity();
     auto *rmotion = new Motion(si_);
     base::State *rstate = rmotion->state;
+    base::State *projState = si_->allocState();   // scratch for goal-biased projection
     bool solved = false;
 
     auto best_path(std::make_shared<PathGeometric>(si_));
@@ -434,6 +567,68 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
             /* remember which motion was just added */
             Motion *addedMotion = tgi.xmotion;
 
+            // --- PC-safe goal-biased projection onto the goal manifold ---------------------
+            // If the goal supports projection and we just grew the START tree, occasionally try
+            // to jump this new node straight onto the goal manifold (targets -> goal, free
+            // objects left where they are). Only accept it when the projection edge moves at
+            // most ONE object (single action); multi-target goals fall back to the goal-tree
+            // connection below. The sampled goal tree remains the fallback, and goalBias_ > 0 is
+            // fixed, so probabilistic completeness is preserved. See
+            // demos/larrt2d/GOAL_REGION_AND_COMPLETENESS.md.
+            if (goalProj != nullptr && tree == tStart_ && rng_.uniformReal(0.0, 1.0) < goalBias_ &&
+                goalProj->projectToGoal(addedMotion->state, projState))
+            {
+                // count how many groups differ between the node and its projection
+                std::vector<double> a, b;
+                si_->getStateSpace()->copyToReals(a, addedMotion->state);
+                si_->getStateSpace()->copyToReals(b, projState);
+                int changedGroups = 0;
+                for (const auto &grp : group_indices)
+                    for (int idx : grp)
+                        if (std::abs(a[idx] - b[idx]) > 1e-10) { ++changedGroups; break; }
+
+                const bool alreadyAtGoal = (changedGroups == 0);              // node itself is a goal
+                const bool oneMove = (changedGroups == 1) &&
+                                     si_->isValid(projState) &&
+                                     si_->checkMotion(addedMotion->state, projState);
+
+                if (alreadyAtGoal || oneMove)
+                {
+                    // The solution is the start-tree chain up to addedMotion, plus (if a move is
+                    // needed) the single projection edge onto the goal manifold.
+                    Motion *last = addedMotion;
+                    if (oneMove)
+                    {
+                        auto *pm = new Motion(si_);
+                        createNewMotion(projState, addedMotion, pm);   // sets parent/root/cost/index
+                        tStart_->add(pm);
+                        last = pm;
+                    }
+
+                    auto path(std::make_shared<PathGeometric>(si_));
+                    std::vector<Motion *> chain;
+                    for (Motion *m = last; m != nullptr; m = m->parent)
+                        chain.push_back(m);
+                    for (auto it = chain.rbegin(); it != chain.rend(); ++it)
+                        path->append((*it)->state);
+
+                    pd_->doPathDefragComplete(path->getStates());
+                    if (getCostPath(path->getStates()) < bestCost_.value())
+                    {
+                        OMPL_DEBUG("Projection solution, cost: %d (old %g)",
+                                   getCostPath(path->getStates()), bestCost_.value());
+                        freeStates(best_path->getStates());
+                        best_path = path;
+                        bestCost_ = base::Cost(getCostPath(best_path->getStates()));
+                    }
+                    // Solution found and defragmented to convergence -> stop planning.
+                    // LA-RRT minimises actions through single-object moves + the
+                    // PathDefragmenter, not by running the tree search for the whole time
+                    // budget; the best_path is emitted after the loop.
+                    break;
+                }
+            }
+
             /* attempt to connect trees */
             /* if reached, it means we used rstate directly, no need to copy again */
             if (gs != REACHED)
@@ -475,14 +670,10 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
                     bestCost_ = base::Cost(getCostPath(best_path->getStates()));
                 }
 
-                if(ptc)
-                {
-                    pdef_->addSolutionPath(best_path, false, 0.0, getName());
-                    solved = true;
-                    break;
-                }
-                else
-                    continue;
+                // The trees connected and the path was defragmented to convergence
+                // (doPathDefragComplete). That is the whole plan -- stop here instead of
+                // spending the remaining time budget; the best_path is emitted after the loop.
+                break;
             }
             else
             {
@@ -496,6 +687,15 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
                 else if (tgi.start)
                 {
                     // We were working from the startTree.
+                    // NOTE: a start-tree node that already satisfies the goal is only recorded as
+                    // an APPROXIMATE solution here, never accepted as exact. For rearrangement goals
+                    // where non-target objects may be anywhere, accepting it exactly would leave the
+                    // free objects in place (fewer actions) -- but doing so soundly requires a
+                    // goal-BIASED projection extension onto the goal manifold, not just loosening
+                    // this test: the goal set is measure-zero in the target dims, so an unbiased
+                    // sampler reaches it with probability 0. See
+                    // demos/larrt2d/GOAL_REGION_AND_COMPLETENESS.md for the probabilistic-
+                    // completeness analysis before changing this.
                     double dist = 0.0;
                     goal->isSatisfied(tgi.xmotion->state, &dist);
                     if (dist < approxdif)
@@ -512,10 +712,45 @@ ompl::base::PlannerStatus ompl::geometric::LARRT::solve(const base::PlannerTermi
 
     si_->freeState(tgi.xstate);
     si_->freeState(rstate);
+    si_->freeState(projState);
     delete rmotion;
 
     OMPL_INFORM("%s: Created %u states (%u start + %u goal)", getName().c_str(), tStart_->size() + tGoal_->size(),
                 tStart_->size(), tGoal_->size());
+
+    // --- Optional tree dump for diagnostics (set env LARRT_TREE_DUMP=<path>) ---------------
+    // Writes every node of both trees (full real vector + parent index) as JSON so the search
+    // frontier can be visualised in the workspace. No effect unless the env var is set.
+    if (const char *dumpPath = std::getenv("LARRT_TREE_DUMP"))
+    {
+        std::ofstream df(dumpPath);
+        if (df)
+        {
+            auto writeTree = [&](TreeData &tree, const char *key) {
+                std::vector<Motion *> ms;
+                if (tree) tree->list(ms);
+                std::unordered_map<const Motion *, int> idx;
+                for (size_t i = 0; i < ms.size(); ++i) idx[ms[i]] = static_cast<int>(i);
+                df << "\"" << key << "\":[";
+                for (size_t i = 0; i < ms.size(); ++i)
+                {
+                    std::vector<double> v;
+                    si_->getStateSpace()->copyToReals(v, ms[i]->state);
+                    df << (i ? "," : "") << "{\"v\":[";
+                    for (size_t d = 0; d < v.size(); ++d) df << (d ? "," : "") << v[d];
+                    int p = ms[i]->parent ? idx[ms[i]->parent] : -1;
+                    df << "],\"p\":" << p << "}";
+                }
+                df << "]";
+            };
+            df << "{";
+            writeTree(tStart_, "start");
+            df << ",";
+            writeTree(tGoal_, "goal");
+            df << "}\n";
+            OMPL_INFORM("%s: dumped trees to %s", getName().c_str(), dumpPath);
+        }
+    }
 
     if(best_path->getStateCount()>1)
     {

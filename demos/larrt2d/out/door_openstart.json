@@ -1,0 +1,118 @@
+{
+  "action_count": 2,
+  "groups": [
+    [
+      0,
+      1
+    ],
+    [
+      2
+    ]
+  ],
+  "name": "door_openstart",
+  "objects": [
+    {
+      "angle": 0.0,
+      "dims": [
+        0,
+        1
+      ],
+      "goal": [
+        8.0,
+        4.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "A",
+      "rotates": false,
+      "start": [
+        2.0,
+        4.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "dims": [
+        2
+      ],
+      "goal": null,
+      "hinge": [
+        5.35,
+        2.5
+      ],
+      "length": 3.0,
+      "name": "door",
+      "start": [
+        0.0
+      ],
+      "target": false,
+      "type": "door",
+      "width": 0.3
+    }
+  ],
+  "obstacles": [
+    {
+      "xmax": 10.0,
+      "xmin": 0.0,
+      "ymax": 0.3,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 10.0,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 5.7
+    },
+    {
+      "xmax": 0.3,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 10.0,
+      "xmin": 9.7,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 5.3,
+      "xmin": 4.7,
+      "ymax": 2.5,
+      "ymin": 0.3
+    },
+    {
+      "xmax": 5.3,
+      "xmin": 4.7,
+      "ymax": 5.7,
+      "ymin": 5.5
+    }
+  ],
+  "path": [
+    [
+      2.0,
+      4.0,
+      0.0
+    ],
+    [
+      8.0,
+      4.0,
+      0.0
+    ],
+    [
+      8.0,
+      4.0,
+      0.0596414424745903
+    ]
+  ],
+  "planner": "larrt",
+  "solve_time_s": 0.007839637,
+  "solved": true,
+  "world": {
+    "xmax": 10.0,
+    "xmin": 0.0,
+    "ymax": 6.0,
+    "ymin": 0.0
+  }
+}

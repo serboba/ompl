@@ -1,0 +1,115 @@
+{
+  "name": "my_scene",
+  "world": {
+    "xmin": 0,
+    "xmax": 10,
+    "ymin": 0,
+    "ymax": 6
+  },
+  "obstacles": [
+    {
+      "xmin": 0,
+      "xmax": 10,
+      "ymin": 0,
+      "ymax": 0.3
+    },
+    {
+      "xmin": 0,
+      "xmax": 10,
+      "ymin": 5.7,
+      "ymax": 6
+    },
+    {
+      "xmin": 0,
+      "xmax": 0.3,
+      "ymin": 0,
+      "ymax": 6
+    },
+    {
+      "xmin": 9.7,
+      "xmax": 10,
+      "ymin": 0,
+      "ymax": 6
+    },
+    {
+      "xmin": 4.95,
+      "xmax": 5.15,
+      "ymin": 0.23,
+      "ymax": 2.43
+    },
+    {
+      "xmin": 4.7,
+      "xmax": 5.3,
+      "ymin": 5.5,
+      "ymax": 5.7
+    }
+  ],
+  "objects": [
+    {
+      "name": "door1",
+      "type": "door",
+      "target": false,
+      "hinge": [
+        5.05,
+        2.59
+      ],
+      "length": 2.85,
+      "width": 0.2,
+      "start_angle": 1.5695774567142637,
+      "angle_bounds": [
+        -3.141592653589793,
+        3.141592653589793
+      ]
+    },
+    {
+      "name": "box2",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        1.46,
+        3.97,
+        0
+      ],
+      "xbounds": [
+        0.65,
+        9.35
+      ],
+      "ybounds": [
+        0.65,
+        5.35
+      ],
+      "tbounds": [
+        0,
+        0
+      ],
+      "goal": [
+        6.8,
+        3.9,
+        0
+      ]
+    },
+    {
+      "name": "door3",
+      "type": "revolute",
+      "target": false,
+      "anchor": [
+        6.18,
+        5.58
+      ],
+      "com": [
+        -1.42,
+        0
+      ],
+      "hx": 1.425,
+      "hy": 0.1,
+      "start_angle": 1.5608381203448283,
+      "angle_bounds": [
+        -3.141592653589793,
+        3.141592653589793
+      ]
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "action_count": 2,
+  "groups": [
+    [
+      0,
+      1
+    ],
+    [
+      2,
+      3
+    ]
+  ],
+  "name": "move_aside",
+  "objects": [
+    {
+      "angle": 0.0,
+      "dims": [
+        0,
+        1
+      ],
+      "goal": [
+        10.0,
+        1.5
+      ],
+      "hx": 0.4,
+      "hy": 0.4,
+      "name": "A",
+      "rotates": false,
+      "start": [
+        2.0,
+        1.5
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        2,
+        3
+      ],
+      "goal": null,
+      "hx": 0.4,
+      "hy": 0.4,
+      "name": "B",
+      "rotates": false,
+      "start": [
+        6.0,
+        1.5
+      ],
+      "target": false,
+      "type": "box"
+    }
+  ],
+  "obstacles": [
+    {
+      "xmax": 12.0,
+      "xmin": 0.0,
+      "ymax": 0.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 0.5,
+      "xmin": 0.0,
+      "ymax": 5.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 12.0,
+      "xmin": 11.5,
+      "ymax": 5.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 5.0,
+      "xmin": 0.5,
+      "ymax": 3.0,
+      "ymin": 2.5
+    },
+    {
+      "xmax": 11.5,
+      "xmin": 7.0,
+      "ymax": 3.0,
+      "ymin": 2.5
+    },
+    {
+      "xmax": 5.0,
+      "xmin": 4.5,
+      "ymax": 4.5,
+      "ymin": 3.0
+    },
+    {
+      "xmax": 7.5,
+      "xmin": 7.0,
+      "ymax": 4.5,
+      "ymin": 3.0
+    },
+    {
+      "xmax": 7.5,
+      "xmin": 4.5,
+      "ymax": 5.0,
+      "ymin": 4.5
+    }
+  ],
+  "path": [
+    [
+      2.0,
+      1.5,
+      6.0,
+      1.5
+    ],
+    [
+      2.0,
+      1.5,
+      6.032295373859891,
+      3.047910166924335
+    ],
+    [
+      10.0,
+      1.5,
+      6.032295373859891,
+      3.047910166924335
+    ]
+  ],
+  "planner": "larrt",
+  "solve_time_s": 0.007375957,
+  "solved": true,
+  "world": {
+    "xmax": 12.0,
+    "xmin": 0.0,
+    "ymax": 5.0,
+    "ymin": 0.0
+  }
+}

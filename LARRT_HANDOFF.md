@@ -6,7 +6,7 @@ This document is a self-contained brief for an agent picking up the **LA-RRT** w
 
 ## 1. What LA-RRT is
 
-**LA-RRT (LARRT)** is the user's (Servet Bora Bayraktar) own motion planner for **solving rearrangement puzzles using FACTORED ("fragmented") state spaces**. It is part of an IEEE RA-L research line (related to the user's RA-L 2023 paper *"Solving Rearrangement Puzzles using Path Defragmentation"*). It is OMPL-based.
+**LA-RRT (LARRT)** is the user's (Servet Bora Bayraktar) own motion planner for **solving rearrangement puzzles using FACTORED ("factored") state spaces**. It is part of an IEEE RA-L research line (related to the user's RA-L 2023 paper *"Solving Rearrangement Puzzles using Path Defragmentation"*). It is OMPL-based.
 
 Core idea: the configuration vector is partitioned into independent **groups** (one group = one movable object / DOF set). LA-RRT is a **bidirectional RRT** (start tree + goal tree) that optimizes the **number of actions** — i.e. how many distinct groups change between consecutive states (mode-switches) — rather than geometric path length. A candidate motion that changes several groups at once is **isolated** into a chain of single-group steps; once the trees connect, the solution is run through a **PathDefragmenter** that reorders/merges consecutive same-group segments (collision-checked) to drive the action count down further.
 
@@ -18,15 +18,15 @@ This is NOT MAB-RRT (a different, newer planner in the same OMPL fork — do not
 
 - **Repo:** `serboba/ompl` (the user's OMPL fork). Remote `git@github.com:serboba/ompl.git`.
 - **Working tree for this task:** `/home/serboba/larrt_wt` — a git worktree on branch **`larrt`**, based off `origin/main` (current OMPL, Dec 2025). Work here. Do NOT touch the user's other checkout at `/home/serboba/transferompl_ws/src/ompl_iso` (it sits on a different branch with uncommitted build artifacts).
-- **Canonical source commit (where LA-RRT was originally implemented):** `2b9a01c20817f98fe5c712ca5cd06553012f397c` — *"Added LA-RRT, demo LowActionsPlanning, FragmentedStateSpace, MinimalActionsObjective, PathDefragmenter"* (May 2022). It is NOT a branch tip; fetch with `git fetch origin 2b9a01c2...` if you need to diff against the original.
+- **Canonical source commit (where LA-RRT was originally implemented):** `2b9a01c20817f98fe5c712ca5cd06553012f397c` — *"Added LA-RRT, demo LowActionsPlanning, FactoredStateSpace, MinimalActionsObjective, PathDefragmenter"* (May 2022). It is NOT a branch tip; fetch with `git fetch origin 2b9a01c2...` if you need to diff against the original.
 - **Branch commits so far:**
-  - `53340732` — Add LA-RRT planner, fragmented state space, path defragmenter; build on OMPL main (the port + production cleanup).
+  - `53340732` — Add LA-RRT planner, factored state space, path defragmenter; build on OMPL main (the port + production cleanup).
   - `d42e1602` — Add 2D rearrangement demos and visualization for LA-RRT.
 - Nothing is pushed. Commit on `larrt`; do not push unless asked. Commit style: **short, human-looking messages, NO AI co-author trailers.**
 
 ### Algorithm files (under `src/ompl/`)
 - `geometric/planners/rrt/LARRT.{h, src/LARRT.cpp}` — the planner (`og::LARRT(si, groups, useIsolation=true, goalIndex=0)`; `groups` is `vector<vector<int>>`).
-- `base/spaces/FragmentedStateSpace.{h, src/FragmentedStateSpace.cpp}` — subclass of `RealVectorStateSpace`. `grouped_indices : vector<vector<int>>` partitions dimension indices into groups. `distance()` is L1; **`interpolate()` moves ONE GROUP AT A TIME** (sequential, proportional to each group's share of total distance) — this is why single-group ("isolated") moves are the natural primitive. Build via `addDimension(low, high)` per dimension; state type indexes `values[i]`.
+- `base/spaces/FactoredStateSpace.{h, src/FactoredStateSpace.cpp}` — subclass of `RealVectorStateSpace`. `grouped_indices : vector<vector<int>>` partitions dimension indices into groups. `distance()` is L1; **`interpolate()` moves ONE GROUP AT A TIME** (sequential, proportional to each group's share of total distance) — this is why single-group ("isolated") moves are the natural primitive. Build via `addDimension(low, high)` per dimension; state type indexes `values[i]`.
 - `base/objectives/MinimalActionsObjective.{h, src/MinimalActionsObjective.cpp}` — the objective LA-RRT optimizes: counts group-changes (actions/mode-switches), NOT path length.
 - `geometric/PathDefragmenter.{h, src/PathDefragmenter.cpp}` — post-processing defrag (the heart of the method). **Has bugs — see §4.**
 
@@ -63,7 +63,7 @@ Build is CLEAN on current OMPL main; API drift from 2022 was essentially zero (L
 ## 4. KNOWN OPEN BUGS — this is the priority work
 
 ### 4a. PathDefragmenter is buggy on 2-group problems (CRITICAL)
-The `PathDefragmenter` (run inside `LARRT::solve`) is the core of the method but is **broken for small 2-group fragmented problems**. Depending on the path's fragment structure it will:
+The `PathDefragmenter` (run inside `LARRT::solve`) is the core of the method but is **broken for small 2-group factored problems**. Depending on the path's fragment structure it will:
 1. **Crash** — `std::out_of_range` underflow in `skipFragments` around `PathDefragmenter.cpp:353` (the `getFragment(fragmentIDs.at(i).end_index + 1, ...)` / index arithmetic underflows).
 2. **Truncate** — the `cutOffIfGoalReached` / zero-state `temp_from` logic drops the goal-reaching tail, returning a path that doesn't reach the goal.
 3. **Collapse / reintroduce collisions** — merging consecutive same-group segments straightens intra-object detours back through obstacles, yielding a colliding "solution."
@@ -78,7 +78,7 @@ The original `LowActionsPlanning` demo only avoids this because its specific 3-o
 ---
 
 ## 5. What is already DONE (don't redo)
-- Ported LA-RRT (+ FragmentedStateSpace, MinimalActionsObjective, PathDefragmenter, demo) from commit `2b9a01c2` onto current OMPL `main`; builds clean, `LowActionsPlanning` demo runs (finds a minimal-action solution).
+- Ported LA-RRT (+ FactoredStateSpace, MinimalActionsObjective, PathDefragmenter, demo) from commit `2b9a01c2` onto current OMPL `main`; builds clean, `LowActionsPlanning` demo runs (finds a minimal-action solution).
 - Production cleanup on the algorithm files: OMPL BSD license headers (authored "Servet Bora Bayraktar"), accurate doc-comments (replaced copy-pasted RRT-Connect docstring with `@anchor gLARRT`; fixed the MinimalActionsObjective doc that wrongly said "path length"), removed dead/commented debug code (incl. the commented `robowflex_dart` include), `NULL`→`nullptr`, fixed include-guard names, translated German comments, silenced unused-parameter warnings. Behavior unchanged.
 - Two new 2D explainer demos + matplotlib static/animation viz + README + sample artifacts.
 
