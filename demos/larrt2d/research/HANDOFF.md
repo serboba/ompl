@@ -257,18 +257,19 @@ mismatches** (`out/benchmark_certify.json`; details + the two non-cert causes in
    k=1..4), and every planner non-certification there is **planner scaling/suboptimality**, not LB
    looseness. Note `swap_3_1`'s optimum-5 is a *knife-edge stacking* plan (reproduce with `oracle
    --no-prune --cand-step 0.7`; the lean default gives 7). Remaining: settle the sub-MRB swaps (item 2).
-2. **MRB-aware lower bound (T4) — CONFIRMED WARRANTED (2026-07-06).** The sound LB is provably LOOSE
-   on the sub-MRB family. `swap_4_2` (2 niches, k=4): the FULL oracle is intractable (n=4 `--no-prune`
-   times out at 900 s), but an **exhaustive search over the only 7-action 4-reversal structure** (A
-   crosses once; B,C,D each park-then-goal, all parked at once) finds **NO 7-plan** — while the same
-   search DOES find one for `swap_4_3` (3 niches, oracle-confirmed 7), validating the method. So
-   `swap_4_2` optimum **≥ 8 > sound LB 7**: the niche-count-independent LB undercounts under buffer
-   scarcity (stacking imposes an unstack order that collides with goal placement ⇒ extra buffer visits
-   the FVS model misses — the MRB phenomenon, `03`). **T4 = add an MRB / running-buffer term to
-   `monotonicity.py`'s LB.** Concrete next steps: (a) make the full oracle tractable at n=4 (optimize
-   the reachability floods / prune configs) to pin `swap_4_2`'s exact optimum (∈[8,12]); (b) derive the
-   MRB-aware LB and verify LB=optimum on the sub-MRB scenes; (c) the `gen_scenes.py --niche-floor`
-   (shallow niche) knob makes stacking-proof, non-degenerate looseness instances for the testbed.
+2. **MRB-aware lower bound (T4) — IMPLEMENTED (2026-07-06), sound.** `monotonicity.py --mrb`
+   (and `bench_certify.py --mrb`) apply `mrb_refine()`: for the **single-crosser box-corridor family**
+   (guard: all boxes, `base_lb == 2·#objects−1` — the park-once structure), it runs the EXHAUSTIVE
+   `swap_optimum_check` search (all niche-slot assignments incl. stacking × all park/unpark orders,
+   each move reachability-checked). If no park-once plan of length `base_lb` exists, no plan of that
+   length exists at all, so it **soundly raises the LB by 1**. Verified: `swap_4_2` 7→**8**; every tight
+   scene UNCHANGED (`swap_3_1` 5, `swap_4_3` 7, buffer_swap 3, two_buffer 5, blocked_goal_chain_2 5);
+   doors/non-matching scenes skipped (no bump); off by default (backward compatible). It only ever
+   *raises* the LB and only when it *proves* the cheaper plan infeasible, so it cannot make the LB
+   unsound. **Remaining (T4.x):** (a) the bump is +1 only — `swap_4_2`'s exact optimum ∈[8,12] still
+   needs a tractable n=4 full oracle or an iterated search to pin; (b) generalize `mrb_refine` beyond
+   the single-crosser corridor family (arbitrary structure) — the honest open piece; (c) the
+   `gen_scenes.py --niche-floor` shallow-niche knob gives non-degenerate looseness testbeds for (b).
 3. **Close the k≥4 planner-scaling gaps.** `blocked_goal_chain_4` (LB 9) and `swap_{4,5}_*`
    unsolved within budget; 20 s retry did **not** help → needs better search, not more time. These
    are the natural **"does the T2 bandit help?"** evaluation targets — re-run `bench_certify` after

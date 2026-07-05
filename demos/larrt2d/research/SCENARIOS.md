@@ -189,6 +189,16 @@ the bottom's path), forcing extra buffer visits the FVS-based LB never counts (t
 LB provably LOOSE on sub-MRB (`m<k−1`) ⟹ T4 (MRB / running-buffer-aware LB) is warranted with a
 rigorous example.** (Exact `swap_4_2` optimum ∈ [8,12] still open — lean-oracle no-stacking bound
 is 12; pinning it needs a tractable full oracle.)
+
+**T4 IMPLEMENTED (2026-07-06): `monotonicity.py --mrb` / `bench_certify.py --mrb`.** `mrb_refine()`
+soundly tightens the LB for the single-crosser box-corridor family (guard: all boxes,
+`base_lb == 2·#objects−1`): it runs the exhaustive `swap_optimum_check` (all niche-slot assignments
+incl. stacking × all park/unpark orders, reachability-checked); if no park-once plan of length
+`base_lb` exists, no plan of that length does, so it **raises the LB by 1**. It ONLY ever raises the
+LB and only on proven infeasibility ⇒ cannot be unsound. Verified: `swap_4_2` 7→**8** (certifies the
+looseness), all tight scenes unchanged, non-matching scenes skipped, off by default. Open: the +1 is
+not necessarily tight (swap_4_2 optimum may exceed 8), and generalizing beyond the single-crosser
+corridor family is the honest remaining T4 work (use `--niche-floor` shallow scenes as the testbed).
 - **~~Buffer-scarcity LB looseness~~ (`swap_3_1`) — RETRACTED by the exact oracle (2026-07-06).**
   The planner solves `swap_3_1` at **7**, so I hypothesized the LB (5) was *loose* under buffer
   scarcity (one niche can't run a 2-simultaneous-buffer 5-plan). **Wrong.** `tools/oracle.py`

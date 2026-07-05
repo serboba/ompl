@@ -535,6 +535,50 @@ def analyse(names, info, arcs):
 
 
 # ---------------------------------------------------------------------------
+# T4: MRB / buffer-scarcity refinement of the sound lower bound
+# ---------------------------------------------------------------------------
+
+def mrb_refine(scene, base_lb):
+    """SOUND buffer-scarcity (MRB) tightening of the sound LB (HANDOFF T4).
+
+    The FVS-based sound LB corresponds to a *park-once* plan: each object makes
+    exactly its base number of runs. For the **single-crosser box-corridor
+    family** -- where `base_lb == 2*(#objects) - 1` (one object crosses once;
+    every other object parks once in a niche and then goes to its goal, all of
+    them parked simultaneously since each blocks the crosser's lane) -- a
+    park-once plan of length `base_lb` has a FORCED macro-structure
+    ([all parks][cross][all unparks]) with finitely many functionally distinct
+    buffer configs (niche bottom / stacked top). `swap_optimum_check` searches
+    them EXHAUSTIVELY (every niche-slot assignment incl. stacking x every
+    park/unpark order, each move reachability-checked). If NO such plan exists,
+    then no plan of length `base_lb` exists at all, so the true optimum is
+    >= base_lb + 1 -- a **sound** bump (buffer scarcity / the MRB phenomenon,
+    e.g. `swap_4_2`: 2 niches can't realise the 7-plan, optimum >= 8 > LB 7).
+
+    This ONLY ever raises the LB, and only when it PROVES the cheaper plan
+    infeasible. Outside the guarded family it is a no-op (returns `base_lb`
+    unchanged), so it can never make the LB unsound. Returns (lb, note).
+    A fully general MRB-aware LB (arbitrary structure) remains open.
+    """
+    objs = scene.get("objects", [])
+    n = len(objs)
+    if n < 2 or any(o.get("type", "box") != "box" for o in objs):
+        return base_lb, None
+    if base_lb != 2 * n - 1:
+        return base_lb, None                  # not the park-once structure we can test
+    try:
+        from swap_optimum_check import check
+    except Exception as exc:                   # pragma: no cover
+        return base_lb, "MRB check unavailable (%s)" % exc
+    found, _ = check(scene)
+    if found:
+        return base_lb, "MRB check: park-once (2k-1) plan feasible -> LB is tight"
+    return base_lb + 1, ("MRB check: NO park-once (2k-1) plan exists -> buffer scarcity "
+                         "forces >= 1 extra move; sound LB raised %d -> %d"
+                         % (base_lb, base_lb + 1))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -547,6 +591,9 @@ def main(argv):
                     help="grid step for the disconnection proof (default %g)" % DISC_GRID)
     ap.add_argument("--no-disc", action="store_true",
                     help="skip disconnection arcs (endpoint-only sound graph)")
+    ap.add_argument("--mrb", action="store_true",
+                    help="T4: sound buffer-scarcity (MRB) tightening of the sound LB "
+                         "(single-crosser box-corridor family; only ever raises the LB)")
     ap.add_argument("--json", action="store_true", dest="as_json")
     args = ap.parse_args(argv[1:])
 
@@ -559,6 +606,11 @@ def main(argv):
     ep = analyse(names, info, ep_arcs)
     sw = analyse(names, info, sw_arcs)
 
+    sound_lb = ep["action_lower_bound"]
+    mrb_note = None
+    if args.mrb:
+        sound_lb, mrb_note = mrb_refine(scene, ep["action_lower_bound"])
+
     upper = None
     if args.solution:
         with open(args.solution) as f:
@@ -567,7 +619,8 @@ def main(argv):
 
     if args.as_json:
         out = {"scene": scene.get("name"), "warnings": warnings,
-               "sound": ep, "swept": sw, "planner_action_count": upper}
+               "sound": ep, "swept": sw, "planner_action_count": upper,
+               "sound_lb_mrb": sound_lb, "mrb_note": mrb_note}
         json.dump(out, sys.stdout, indent=2)
         print()
         return 0
@@ -596,9 +649,13 @@ def main(argv):
               ("  forced blockers: %s" % res["forced_blockers"])
               if res["forced_blockers"] else ""))
         print("  action lower bound: %d" % res["action_lower_bound"])
+        if res is ep and mrb_note:
+            print("  [MRB/T4] %s" % mrb_note)
+            if sound_lb != ep["action_lower_bound"]:
+                print("  refined sound lower bound: %d" % sound_lb)
 
     if upper is not None:
-        lb = ep["action_lower_bound"]
+        lb = sound_lb
         print("\n== Q5 bracket ==")
         print("  structural lower bound (sound graph):    %d" % lb)
         print("  planner action count (upper bound):      %d" % upper)

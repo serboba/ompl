@@ -34,15 +34,18 @@ ROOT = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
 sys.path.insert(0, HERE)
 
 from benchmark import run_once                      # noqa: E402
-from monotonicity import build_graphs, analyse, SWEEP_SAMPLES  # noqa: E402
+from monotonicity import build_graphs, analyse, mrb_refine, SWEEP_SAMPLES  # noqa: E402
 
 
-def sound_lb(scene):
-    """Sound-graph action lower bound for a parsed scene dict."""
+def sound_lb(scene, mrb=False):
+    """Sound-graph action lower bound for a parsed scene dict (T4-refined if mrb)."""
     info, sound_arcs, _swept, warns = build_graphs(scene, SWEEP_SAMPLES)
     names = [o["name"] for o in scene["objects"]]
     res = analyse(names, info, sound_arcs)
-    return res["action_lower_bound"], warns
+    lb = res["action_lower_bound"]
+    if mrb:
+        lb, _ = mrb_refine(scene, lb)
+    return lb, warns
 
 
 def derived_optimum(meta):
@@ -63,6 +66,8 @@ def main():
     ap.add_argument("--glob", default="demos/larrt2d/scenes/gen/*.json")
     ap.add_argument("--planner", default="larrt")
     ap.add_argument("--out", default="demos/larrt2d/out/benchmark_certify.json")
+    ap.add_argument("--mrb", action="store_true",
+                    help="use the T4 MRB-refined sound LB (buffer-scarcity tightening)")
     args = ap.parse_args()
 
     scenes = sorted(glob.glob(os.path.join(ROOT, args.glob)))
@@ -83,7 +88,7 @@ def main():
         meta = scene.get("_meta", {})
         fam = meta.get("family", "?")
         opt, ostat = derived_optimum(meta)
-        lb, warns = sound_lb(scene)
+        lb, warns = sound_lb(scene, mrb=args.mrb)
 
         acs, times, nvalid = [], [], 0
         best_ac, best_solution = None, None
