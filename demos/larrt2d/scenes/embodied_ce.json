@@ -1,0 +1,33 @@
+{
+  "name": "embodied_ce",
+  "_meta": {
+    "purpose": "Q-E2 counterexample for research/09: object-level feasibility does NOT imply embodied feasibility.",
+    "claim": "The box's own start->goal path is collision-free, but no collision-free base+2R-arm config can touch the goal push-face (contact-support set empty): min reachable distance 1.46 > arm reach 1.20.",
+    "validated_by": "tools/embodied_ce_check.py (chair-independent) + subagent self-check; both PASS.",
+    "note": "The 'robot' object uses the schema proposed in research/09b (not yet supported by any driver). Geometry (world/obstacles/box) IS consumable by validate_puzzle.py-style SAT tools."
+  },
+  "world": { "xmin": 0.0, "xmax": 12.0, "ymin": 0.0, "ymax": 6.0 },
+  "obstacles": [
+    { "xmin": 4.5, "xmax": 7.5, "ymin": 0.0,  "ymax": 2.64 },
+    { "xmin": 4.5, "xmax": 7.5, "ymin": 3.36, "ymax": 6.0 }
+  ],
+  "objects": [
+    {
+      "name": "box", "type": "box", "hx": 0.35, "hy": 0.35, "rotates": false, "target": true,
+      "start": [2.0, 3.0, 0.0], "goal": [6.35, 3.0, 0.0],
+      "xbounds": [0.35, 11.65], "ybounds": [0.35, 5.65], "tbounds": [0.0, 0.0],
+      "pushable_faces": [
+        { "id": "rear", "normal_local": [-1.0, 0.0], "contact_offset_local": [-0.35, 0.0], "friction_half_angle": 0.35 }
+      ]
+    },
+    {
+      "name": "robot", "type": "robot",
+      "base_hx": 0.4, "base_hy": 0.4,
+      "shoulder_off": [0.4, 0.0],
+      "L1": 0.6, "W1": 0.1, "L2": 0.6, "W2": 0.1,
+      "start": [1.0, 3.0, 0.0, 0.0, 0.0],
+      "angle_bounds_base": [-3.14159, 3.14159],
+      "q_bounds": [[-3.14159, 3.14159], [-3.14159, 3.14159]]
+    }
+  ]
+}

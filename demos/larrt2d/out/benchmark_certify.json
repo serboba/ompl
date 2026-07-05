@@ -1,0 +1,31 @@
+{
+  "planner": "larrt",
+  "runs": 2,
+  "time_s": 5.0,
+  "n_scenes": 1,
+  "n_certified": 1,
+  "n_mismatch": 0,
+  "rows": [
+    {
+      "scene": "swap_2_1",
+      "family": "swap",
+      "params": {
+        "k": 2,
+        "m": 1,
+        "optimum_conjecture": 3,
+        "optimum_status": "conjectured (verify vs sound LB)",
+        "mrb_conjecture": 1
+      },
+      "derived_optimum": 3,
+      "optimum_status": "conjectured (verify vs sound LB)",
+      "sound_lb": 3,
+      "best_ub": 3,
+      "valid_runs": 2,
+      "runs": 2,
+      "certified": true,
+      "best_solution": "demos/larrt2d/out/swap_2_1_best.json",
+      "median_time_s": 0.017,
+      "note": ""
+    }
+  ]
+}

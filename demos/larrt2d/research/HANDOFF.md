@@ -112,6 +112,18 @@ Two dependency graphs per scene; arc `u → v` means "u must move before v acts/
   outgoing arc that don't otherwise move. **Bounds meet ⇒ certified optimal** under the
   pick-place OBB model (single mover, objects move one at a time).
 
+**§3.1a — LB looseness bug found by T1's cross-check, FIXED (2026-07-04).** The formula above
+under-counted when **multiple start=goal forced blockers share one mover**: the min-COST FVS breaks
+every 2-cycle by buffering that one shared mover (cost +1) and never pays the +2 out-and-back the
+parked blockers owe, so `door_chain_2`/`blocked_goal_chain_2` reported LB 4 (true optimum 5), gap
+growing as #blockers−1. Fix in `analyse()`: a start=goal forced blocker's out-and-back is
+**mandatory** (a disconnection arc proves it must leave; start=goal forces it back ⇒ ≥2 runs), so it
+is now a **base cost of 2**, not an avoidable FVS surcharge; the FVS surcharge (+1) applies only to
+movers, and parked/free blockers are 0-cost FVS members. Verified: chains now certify at 2d+1 /
+2k+1; **all 11 previously-certified suite LBs unchanged**; defrag tests green. (This also advances
+T4 "LB strengthening.") The §3.1 formula text above describes the *original* model; the code is the
+corrected one.
+
 ### 3.2 Suite status (all solutions validated 2026-07-04)
 | scene | sound LB | best UB (planner) | status |
 |---|---|---|---|
@@ -179,6 +191,14 @@ center-y ≤ 2.1 while center-x < 2.4; no under-pass: floor gap 0.6 < box 0.8). 
 - `06` constraint sampling: MBTS keyframe bound (`Pseq`); projection/atlas/reparam taxonomy; quotient-space guides (delete-other-objects is admissible); **Design 1 = swept-corridor-complement buffer sampler** (build first); Diffusion-CCSP only if needed.
 - `07` bandits: niche "bandit over factors of a factored C-space" is **open**. Anchors: Hsu 2005 adaptive hybrid sampling; Faroni & Berenson RA-L 2023; the user's own MAB-RRT (Bayraktar, Orthey, Toussaint — WAFR 2026, sliding-window bandit for sampler selection). Non-stationary theory: SW-UCB/D-UCB (Garivier–Moulines), Rexp3, EXP3.S. **Recommended design in §6 T2.**
 - `08` factor spaces: no canonical SE(n) metric (Park 1995); RRT's Voronoi bias = its metric (Lindemann–LaValle); **workspace-displacement normalization** is the principled exchange rate: door step = |Δθ|·(blade reach), box = ‖Δt‖, SE(2) box = ‖Δt‖ + ρ·|Δθ| with ρ = circumradius (Schwarzer–Saha–Latombe certified bound). Composite-planner lesson (dRRT/M*): only NN-lookup and step-cap need the cross-factor exchange rate.
+- `09` embodied contact manipulation (**future paper, idea only**): drop the disembodied "objects move
+  themselves" abstraction — a mobile cube + a simple 2–3R stick arm must reach, contact, and push
+  passive objects (doors don't open themselves). Core new difficulty: object-level feasibility ⇏
+  embodied feasibility (an object's own path may be clear yet the arm can't co-move to keep contact
+  during transport). Reframes factors as robot+contacted-object subsystems on a contact manifold;
+  asks whether a sound reachability-aware LB/certificate survives embodiment (Q-E1..Q-E5). Separate
+  problem statement, documented so the certified-rearrangement paper cites it as future work.
+  Related-work citations in `09` need re-verification (delegated sweep failed on a session limit).
 
 ---
 
@@ -221,6 +241,47 @@ from the arguments recorded in §3.1; write them last.
 ## 6. Continuation tasks (pick up any; each is self-contained)
 
 ### T1 — Scene generators + benchmark  ⟵ *most parallelizable; heavy sonnet-4-6 delegation*
+**STATUS (2026-07-04): core built.** `tools/gen_scenes.py` emits all four families;
+`tools/bench_certify.py` runs the §2.4 protocol + Q5 bracket + the step-3 cross-check into
+`out/benchmark_certify.json`. The step-3 check already paid off: comparing the generator's
+*proven* optimum to the sound LB exposed and fixed an **LB looseness bug** (chains of start=goal
+blockers were under-counted; see §3.1a) — `door_chain_d` and `blocked_goal_chain_k` now certify at
+2d+1 / 2k+1. First sweep (18 structured scenes, larrt best-of-10×8s): **9/18 certified, 0
+mismatches** (`out/benchmark_certify.json`; details + the two non-cert causes in `SCENARIOS.md`).
+
+**T1 OPEN ITEMS (2026-07-05) — prioritized, each self-contained:**
+1. **Resolve the swap k≥4 brackets (planner-gap vs LB-loose ambiguity).** `swap_4_3` solves only
+   at **9** (LB 7, bracket [7,9]); `swap_4_*`/`swap_5_*` mostly unsolved even at 20 s best-of-12.
+   So the swap **`2k−1`=optimum conjecture is verified only for k=2,3, OPEN for k≥4**. Resolve by:
+   (a) hand-construct/search a **7-action 4-reversal** plan and *validate* it → if found, it's a
+   planner gap (→ item 3 / T5); (b) if 7 is provably unreachable with the available niches, the LB
+   is loose (→ item 2). Cleanest settle = the **exact small-n oracle (T5b)**. BLOCKS the swap
+   optimum claim for k≥4.
+2. **MRB-aware lower bound (feeds T4).** The sound LB is **niche-count-independent**, so it is
+   *loose under buffer scarcity*: `swap_3_1` solves at **7 > LB 5** (one niche can't run the
+   2-simultaneous-buffer 5-plan). Add a running-buffer / MRB term to the LB (briefing `03` MRB).
+   Testbed = `swap_k_{m<k−1}`. Also settle whether the 5-plan is *provably* impossible with m=1
+   (→ oracle) to confirm the LB is loose vs the planner merely suboptimal.
+3. **Close the k≥4 planner-scaling gaps.** `blocked_goal_chain_4` (LB 9) and `swap_{4,5}_*`
+   unsolved within budget; 20 s retry did **not** help → needs better search, not more time. These
+   are the natural **"does the T2 bandit help?"** evaluation targets — re-run `bench_certify` after
+   T2/T3 land and compare certification rate at equal budget.
+4. **`random_room` ground truth (needs T5b oracle).** The family is generated but **cannot be
+   benchmarked/certified** until the exact small-n oracle (A* over the discrete mode graph, n≤4)
+   supplies optima. Build the oracle, then run + certify `random_room`. Also: the generator's
+   `--rho` (density) arg is **accepted but not yet implemented** (fixed 8×8 room, n boxes) — wire
+   density in when the oracle exists so the phase-transition sweep (`03` §4–5) is meaningful.
+5. **Scale to ~500 instances + baselines (delegate).** Current sweep is 18 structured scenes,
+   `larrt` only. Grow to the ~500-instance target (blocked by items 3/4) and add baseline planners
+   (`bench_certify --planner`; `rrtconnect|bitstar|aitstar|...`) for the paper's comparison table.
+   Heavy batch = **delegate to a sonnet-4-6 subagent**; keep mismatch analysis local.
+6. **MRB(k) phase-boundary map.** Sweeping `swap_k_m` over m was meant to read off MRB(k) and the
+   cost-vs-niches curve; only k=3 is solved so far (swap_3_1=7 @1 niche, swap_3_2=5 @2) → the map
+   is empty for k≥4. Unblocks once item 3 does.
+7. ~~**Harness nit: preserve best-of-N solutions.**~~ **DONE (2026-07-05):** `bench_certify` now
+   copies the best VALIDATED run to `out/<scene>_best.json` the moment it is produced (before the next
+   run overwrites `out/<scene>.json`) and records the path in `benchmark_certify.json`.
+
 Goal: parameterized families with known/derivable optima; ~500 seeded instances.
 | family | parameters | ground truth |
 |---|---|---|

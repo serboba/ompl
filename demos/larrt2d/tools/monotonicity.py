@@ -479,17 +479,45 @@ def analyse(names, info, arcs):
     movers = [n for n in names if info[n]["moves"]]
     # a non-target (or non-moving) object with an outgoing arc must still clear
     forced = [n for n in names if not info[n]["moves"] and adj.get(n)]
+    forced_set = set(forced)
 
-    # extra actions implied by buffering v: it already needs >=1 action if it
-    # is a mover or forced blocker (so +1), else it moves out AND back (+2).
-    extra = {n: (1 if (n in movers or n in forced) else 2) for n in names}
+    # BASE cost = the minimum number of runs each object must make in ANY valid
+    # solution (a sound per-object lower bound):
+    #   * mover (start != goal)                              -> 1 (>=1 run)
+    #   * forced blocker that is a PARKED TARGET (start==goal
+    #     but pinned to return) -> 2: a disconnection/ordering
+    #     arc proves it must leave its pose, and start==goal
+    #     forces it to come back  => >=2 runs (out AND back)
+    #   * forced blocker that is a FREE object (no goal)      -> 1 (move aside,
+    #     may stay)
+    #   * otherwise                                           -> 0
+    # This fixes a looseness: the old model charged forced blockers only +1 and
+    # relied on a +2 FVS surcharge to catch the out-and-back, but the min-COST
+    # FVS dodged it by buffering a cheaper shared mover instead (e.g. blocked_
+    # goal_chain_k / door_chain_d gave LB k+2 / d+2 instead of the true 2k+1 /
+    # 2d+1). The out-and-back of a parked target is mandatory, so it belongs in
+    # the base, not in an avoidable surcharge.
+    def base_cost(n):
+        if info[n]["moves"]:
+            return 1
+        if n in forced_set:
+            return 2 if info[n]["goal_dof"] is not None else 1
+        return 0
+    base = {n: base_cost(n) for n in names}
+
+    # FVS surcharge = the EXTRA runs (beyond base) that buffering v costs when v
+    # is chosen to break a dependency cycle. Only a mover pays it (base 1 -> 2
+    # runs = +1); a parked target already double-moves in its base, and a free
+    # blocker's single aside-move already is the buffering  => both cost +0. So
+    # min_fvs happily includes the free/parked vertices to break cycles for 0.
+    fvs_extra = {n: (1 if info[n]["moves"] else 0) for n in names}
     fvs = []
     for c in cyclic:
-        fvs.extend(min_fvs(c, adj, extra))
+        fvs.extend(min_fvs(c, adj, fvs_extra))
 
-    # lower bound: every mover >=1 action, every forced blocker >=1 action,
-    # plus the buffer visits of a minimum-cost feedback vertex set.
-    lb = len(movers) + len(forced) + sum(extra[v] for v in fvs)
+    # lower bound: mandatory per-object runs + the extra buffer visits that a
+    # minimum-cost feedback vertex set forces on the movers.
+    lb = sum(base.values()) + sum(fvs_extra[v] for v in fvs)
 
     res = {
         "arcs": arcs,

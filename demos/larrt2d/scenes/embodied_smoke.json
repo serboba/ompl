@@ -1,0 +1,32 @@
+{
+  "name": "embodied_smoke",
+  "_meta": {
+    "purpose": "Solvable smoke-test companion to embodied_ce.json for research/09b.",
+    "claim": "Box start->goal path is collision-free AND the goal push-face stays within contact-support the whole way: the slot is 3.0 tall (vs embodied_ce.json's 0.72), so the base can follow the box in alongside it without ever losing reach.",
+    "note": "Same schema as embodied_ce.json (research/09b robot/pushable_faces convention). Consumed only by tools/embodied_prototype.py."
+  },
+  "world": { "xmin": 0.0, "xmax": 12.0, "ymin": 0.0, "ymax": 6.0 },
+  "obstacles": [
+    { "xmin": 4.5, "xmax": 7.5, "ymin": 0.0, "ymax": 1.5 },
+    { "xmin": 4.5, "xmax": 7.5, "ymin": 4.5, "ymax": 6.0 }
+  ],
+  "objects": [
+    {
+      "name": "box", "type": "box", "hx": 0.35, "hy": 0.35, "rotates": false, "target": true,
+      "start": [2.0, 3.0, 0.0], "goal": [6.0, 3.0, 0.0],
+      "xbounds": [0.35, 11.65], "ybounds": [0.35, 5.65], "tbounds": [0.0, 0.0],
+      "pushable_faces": [
+        { "id": "rear", "normal_local": [-1.0, 0.0], "contact_offset_local": [-0.35, 0.0], "friction_half_angle": 0.35 }
+      ]
+    },
+    {
+      "name": "robot", "type": "robot",
+      "base_hx": 0.4, "base_hy": 0.4,
+      "shoulder_off": [0.4, 0.0],
+      "L1": 0.6, "W1": 0.1, "L2": 0.6, "W2": 0.1,
+      "start": [0.9, 3.4, -0.2, 0.0, 0.0],
+      "angle_bounds_base": [-3.14159, 3.14159],
+      "q_bounds": [[-3.14159, 3.14159], [-3.14159, 3.14159]]
+    }
+  ]
+}

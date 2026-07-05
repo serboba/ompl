@@ -22,6 +22,8 @@ rearrangement project. It is a *thinking/notes* space, separate from the runnabl
 | [`06_constraint_sampling_deep_dive.md`](06_constraint_sampling_deep_dive.md) | LGP/MBTS keyframe bounds, manifold & quotient-space sampling, 3 concrete sampler designs for LA-RRT | from research agent |
 | [`07_bandit_selection.md`](07_bandit_selection.md) | Multi-armed bandits for factor/sampler selection: landscape, non-stationary theory (SW-UCB), 5 reward candidates + recommended design | from research agent |
 | [`08_factor_spaces.md`](08_factor_spaces.md) | Heterogeneous factors (revolute vs prismatic vs SE(2)): metric/normalization theory, workspace-displacement metrics, LA-RRT recommendations | from research agent |
+| [`09_embodied_contact_manipulation.md`](09_embodied_contact_manipulation.md) | **Future paper (idea/parking-lot):** objects don't move themselves — a mobile cube + simple revolute-stick arm must reach, contact, and push them; reachability + contact-maintenance-during-transport coupling; open questions Q-E1..5 | authored; related work verified (subagent + chair) |
+| [`09b_embodied_prototype_blueprint.md`](09b_embodied_prototype_blueprint.md) | Companion **implementation blueprint** for the `09` §8 minimal experiment (robot=SE(2)+2R, push transfer primitive, 2R IK reach test, transit/transfer modes); grounds the route-1 "bypass the single-group core" decision in verified `file:line` references | design accepted; **Python reference prototype built & validated** (`tools/embodied_prototype.py`); C++/OMPL version not yet |
 | [`SCENARIOS.md`](SCENARIOS.md) | Catalogue of the non-monotone / multi-object test scenes we build | authored as we build |
 
 **Tooling:** `../tools/monotonicity.py` — a-priori monotone/non-monotone classifier + Q5 bracket.

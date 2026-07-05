@@ -1,0 +1,200 @@
+{
+  "name": "blocked_goal_chain_3",
+  "world": {
+    "xmin": 0.0,
+    "xmax": 16.0,
+    "ymin": 0.0,
+    "ymax": 6.0
+  },
+  "obstacles": [
+    {
+      "xmin": 0.0,
+      "xmax": 16.0,
+      "ymin": 3.6,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 0.0,
+      "xmax": 0.3,
+      "ymin": 0.0,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 15.7,
+      "xmax": 16.0,
+      "ymin": 0.0,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 0.0,
+      "xmax": 4.3,
+      "ymin": 0.0,
+      "ymax": 2.5
+    },
+    {
+      "xmin": 4.3,
+      "xmax": 5.7,
+      "ymin": 0.0,
+      "ymax": 1.4
+    },
+    {
+      "xmin": 5.7,
+      "xmax": 7.3,
+      "ymin": 0.0,
+      "ymax": 2.5
+    },
+    {
+      "xmin": 7.3,
+      "xmax": 8.7,
+      "ymin": 0.0,
+      "ymax": 1.4
+    },
+    {
+      "xmin": 8.7,
+      "xmax": 10.3,
+      "ymin": 0.0,
+      "ymax": 2.5
+    },
+    {
+      "xmin": 10.3,
+      "xmax": 11.7,
+      "ymin": 0.0,
+      "ymax": 1.4
+    },
+    {
+      "xmin": 11.7,
+      "xmax": 16.0,
+      "ymin": 0.0,
+      "ymax": 2.5
+    }
+  ],
+  "objects": [
+    {
+      "name": "A",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        2.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        15.35
+      ],
+      "ybounds": [
+        1.75,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        14.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "B1",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        5.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        15.35
+      ],
+      "ybounds": [
+        1.75,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        5.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "B2",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        8.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        15.35
+      ],
+      "ybounds": [
+        1.75,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        8.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "B3",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        11.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        15.35
+      ],
+      "ybounds": [
+        1.75,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        11.0,
+        3.0,
+        0.0
+      ]
+    }
+  ],
+  "_meta": {
+    "family": "blocked",
+    "k": 3,
+    "optimum": 7,
+    "optimum_status": "proven",
+    "mrb": 3
+  }
+}

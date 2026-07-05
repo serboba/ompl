@@ -1,0 +1,217 @@
+{
+  "action_count": -1,
+  "groups": [
+    [
+      0,
+      1
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      8,
+      9
+    ]
+  ],
+  "name": "blocked_goal_chain_4",
+  "objects": [
+    {
+      "angle": 0.0,
+      "dims": [
+        0,
+        1
+      ],
+      "goal": [
+        17.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "A",
+      "rotates": false,
+      "start": [
+        2.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        2,
+        3
+      ],
+      "goal": [
+        5.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "B1",
+      "rotates": false,
+      "start": [
+        5.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        4,
+        5
+      ],
+      "goal": [
+        8.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "B2",
+      "rotates": false,
+      "start": [
+        8.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        6,
+        7
+      ],
+      "goal": [
+        11.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "B3",
+      "rotates": false,
+      "start": [
+        11.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        8,
+        9
+      ],
+      "goal": [
+        14.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "B4",
+      "rotates": false,
+      "start": [
+        14.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    }
+  ],
+  "obstacles": [
+    {
+      "xmax": 19.0,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 3.6
+    },
+    {
+      "xmax": 0.3,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 19.0,
+      "xmin": 18.7,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 4.3,
+      "xmin": 0.0,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 5.7,
+      "xmin": 4.3,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 7.3,
+      "xmin": 5.7,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 8.7,
+      "xmin": 7.3,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 10.3,
+      "xmin": 8.7,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 11.7,
+      "xmin": 10.3,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 13.3,
+      "xmin": 11.7,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 14.7,
+      "xmin": 13.3,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 19.0,
+      "xmin": 14.7,
+      "ymax": 2.5,
+      "ymin": 0.0
+    }
+  ],
+  "path": [],
+  "planner": "larrt",
+  "solve_time_s": 20.000140687,
+  "solved": false,
+  "world": {
+    "xmax": 19.0,
+    "xmin": 0.0,
+    "ymax": 6.0,
+    "ymin": 0.0
+  }
+}

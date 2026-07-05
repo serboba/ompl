@@ -1,0 +1,205 @@
+{
+  "action_count": -1,
+  "groups": [
+    [
+      0,
+      1
+    ],
+    [
+      2,
+      3
+    ],
+    [
+      4,
+      5
+    ],
+    [
+      6,
+      7
+    ],
+    [
+      8,
+      9
+    ]
+  ],
+  "name": "swap_5_3",
+  "objects": [
+    {
+      "angle": 0.0,
+      "dims": [
+        0,
+        1
+      ],
+      "goal": [
+        14.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "A",
+      "rotates": false,
+      "start": [
+        2.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        2,
+        3
+      ],
+      "goal": [
+        11.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "B",
+      "rotates": false,
+      "start": [
+        5.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        4,
+        5
+      ],
+      "goal": [
+        8.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "C",
+      "rotates": false,
+      "start": [
+        8.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        6,
+        7
+      ],
+      "goal": [
+        5.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "D",
+      "rotates": false,
+      "start": [
+        11.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    },
+    {
+      "angle": 0.0,
+      "dims": [
+        8,
+        9
+      ],
+      "goal": [
+        2.0,
+        3.0
+      ],
+      "hx": 0.35,
+      "hy": 0.35,
+      "name": "E",
+      "rotates": false,
+      "start": [
+        14.0,
+        3.0
+      ],
+      "target": true,
+      "type": "box"
+    }
+  ],
+  "obstacles": [
+    {
+      "xmax": 16.0,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 3.6
+    },
+    {
+      "xmax": 0.3,
+      "xmin": 0.0,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 16.0,
+      "xmin": 15.7,
+      "ymax": 6.0,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 2.8,
+      "xmin": 0.0,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 4.2,
+      "xmin": 2.8,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 8.8,
+      "xmin": 4.2,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 10.2,
+      "xmin": 8.8,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 11.8,
+      "xmin": 10.2,
+      "ymax": 2.5,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 13.2,
+      "xmin": 11.8,
+      "ymax": 1.4,
+      "ymin": 0.0
+    },
+    {
+      "xmax": 16.0,
+      "xmin": 13.2,
+      "ymax": 2.5,
+      "ymin": 0.0
+    }
+  ],
+  "path": [],
+  "planner": "larrt",
+  "solve_time_s": 8.000082295,
+  "solved": false,
+  "world": {
+    "xmax": 16.0,
+    "xmin": 0.0,
+    "ymax": 6.0,
+    "ymin": 0.0
+  }
+}
