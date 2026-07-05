@@ -174,15 +174,21 @@ close the bracket (`blocked_goal_chain_4`, `swap_4_3`, `swap_3_1`), it was **pla
 suboptimality/scaling**, not LB looseness — the oracle proves the true optima are 9, 7, 5 (= LB).
 **The oracle closes every canonical bracket the planner misses.**
 
-**BUT the sub-MRB swaps (`m<k−1`) are OPEN and re-open T4.** With fewer niches than the canonical
-`k−1`, the lean oracle gives `swap_4_2` (2 niches) = **12 ≫ LB 7**, and `swap_4_1`/`swap_5_1`
-(1 niche) return **no lean plan**. These are only *upper* bounds (the lean prune drops the near-lane
-*stacking* poses that let `swap_3_1` hit 5 with one niche), so the true sub-MRB optima are
-undetermined: they may drop to the LB via stacking, or genuinely exceed it — in which case the
-**niche-count-independent LB IS loose under real buffer scarcity** and an MRB-aware LB (T4) is
-warranted. Settling this needs the FULL-candidate oracle (`--no-prune`), which is expensive at n≥4
-and entangled with the knife-edge stacking degeneracy. **So: LB tight + planner-limited on the
-canonical family (solid, paper-ready); LB-looseness genuinely open on the sub-MRB family.**
+**The sub-MRB swaps (`m<k−1`) show the sound LB CAN BE LOOSE — T4 confirmed (2026-07-06).**
+The full oracle is intractable at n=4 `--no-prune` (`swap_4_2` timed out at 900 s), so this was
+settled by **exhaustive search over the only 7-action structure** a 4-reversal can have (A crosses
+once; each of B,C,D parks once then goes to goal; all three parked simultaneously since each blocks
+A). That search — validated because it **finds** the 7-plan for `swap_4_3` (3 niches, where the
+oracle independently proved optimum 7) — finds **NO 7-plan for `swap_4_2`** (2 niches). Hence
+**`swap_4_2`'s optimum ≥ 8 > sound LB 7: the niche-count-independent LB is genuinely LOOSE under
+buffer scarcity.** Mechanism: with 2 niches you must stack a pair, and stacking imposes an
+*unstack order* (top box exits first) that collides with goal placement (the top box's goal blocks
+the bottom's path), forcing extra buffer visits the FVS-based LB never counts (the MRB phenomenon,
+`03`). `swap_3_1` (1 niche, k=3) was the lucky case where stacking *did* rescue tightness (optimum
+5 = LB); `swap_4_2` is where it cannot. **So: LB tight on the canonical family (`m=k−1`) + chains;
+LB provably LOOSE on sub-MRB (`m<k−1`) ⟹ T4 (MRB / running-buffer-aware LB) is warranted with a
+rigorous example.** (Exact `swap_4_2` optimum ∈ [8,12] still open — lean-oracle no-stacking bound
+is 12; pinning it needs a tractable full oracle.)
 - **~~Buffer-scarcity LB looseness~~ (`swap_3_1`) — RETRACTED by the exact oracle (2026-07-06).**
   The planner solves `swap_3_1` at **7**, so I hypothesized the LB (5) was *loose* under buffer
   scarcity (one niche can't run a 2-simultaneous-buffer 5-plan). **Wrong.** `tools/oracle.py`

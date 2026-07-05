@@ -1,0 +1,148 @@
+{
+  "name": "swap_3_1_shallow",
+  "world": {
+    "xmin": 0.0,
+    "xmax": 10.0,
+    "ymin": 0.0,
+    "ymax": 6.0
+  },
+  "obstacles": [
+    {
+      "xmin": 0.0,
+      "xmax": 10.0,
+      "ymin": 3.6,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 0.0,
+      "xmax": 0.3,
+      "ymin": 0.0,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 9.7,
+      "xmax": 10.0,
+      "ymin": 0.0,
+      "ymax": 6.0
+    },
+    {
+      "xmin": 0.0,
+      "xmax": 2.8,
+      "ymin": 0.0,
+      "ymax": 2.5
+    },
+    {
+      "xmin": 2.8,
+      "xmax": 4.2,
+      "ymin": 0.0,
+      "ymax": 1.8
+    },
+    {
+      "xmin": 4.2,
+      "xmax": 10.0,
+      "ymin": 0.0,
+      "ymax": 2.5
+    }
+  ],
+  "objects": [
+    {
+      "name": "A",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        2.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        9.35
+      ],
+      "ybounds": [
+        2.15,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        8.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "B",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        5.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        9.35
+      ],
+      "ybounds": [
+        2.15,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        5.0,
+        3.0,
+        0.0
+      ]
+    },
+    {
+      "name": "C",
+      "type": "box",
+      "hx": 0.35,
+      "hy": 0.35,
+      "rotates": false,
+      "target": true,
+      "start": [
+        8.0,
+        3.0,
+        0.0
+      ],
+      "xbounds": [
+        0.6499999999999999,
+        9.35
+      ],
+      "ybounds": [
+        2.15,
+        3.25
+      ],
+      "tbounds": [
+        0.0,
+        0.0
+      ],
+      "goal": [
+        2.0,
+        3.0,
+        0.0
+      ]
+    }
+  ],
+  "_meta": {
+    "family": "swap",
+    "k": 3,
+    "m": 1,
+    "niche_floor": 1.8,
+    "optimum_conjecture": 5,
+    "optimum_status": "conjectured (verify vs sound LB)",
+    "mrb_conjecture": 2
+  }
+}

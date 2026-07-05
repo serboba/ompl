@@ -257,14 +257,18 @@ mismatches** (`out/benchmark_certify.json`; details + the two non-cert causes in
    k=1..4), and every planner non-certification there is **planner scaling/suboptimality**, not LB
    looseness. Note `swap_3_1`'s optimum-5 is a *knife-edge stacking* plan (reproduce with `oracle
    --no-prune --cand-step 0.7`; the lean default gives 7). Remaining: settle the sub-MRB swaps (item 2).
-2. **MRB-aware lower bound (T4) — RE-OPENED as genuinely open (2026-07-06).** (Earlier I withdrew this
-   after `swap_3_1` turned out tight; that was too hasty.) The **sub-MRB swaps (`m<k−1`)** are the real
-   test: lean oracle gives `swap_4_2` (2 niches) = **12 ≫ LB 7** and `swap_4_1`/`swap_5_1` (1 niche) =
-   **no lean plan**. These are upper bounds only (lean drops stacking poses). If the FULL-candidate
-   oracle (`--no-prune`) drives them down to the LB → LB tight (T4 unneeded); if they stay `> LB` → the
-   **niche-count-independent LB is genuinely loose under buffer scarcity** and an MRB / running-buffer
-   term (briefing `03`) is warranted. Blocker: `--no-prune` at n≥4 is expensive + entangled with the
-   stacking degeneracy. This is the cleanest open LB question in the project.
+2. **MRB-aware lower bound (T4) — CONFIRMED WARRANTED (2026-07-06).** The sound LB is provably LOOSE
+   on the sub-MRB family. `swap_4_2` (2 niches, k=4): the FULL oracle is intractable (n=4 `--no-prune`
+   times out at 900 s), but an **exhaustive search over the only 7-action 4-reversal structure** (A
+   crosses once; B,C,D each park-then-goal, all parked at once) finds **NO 7-plan** — while the same
+   search DOES find one for `swap_4_3` (3 niches, oracle-confirmed 7), validating the method. So
+   `swap_4_2` optimum **≥ 8 > sound LB 7**: the niche-count-independent LB undercounts under buffer
+   scarcity (stacking imposes an unstack order that collides with goal placement ⇒ extra buffer visits
+   the FVS model misses — the MRB phenomenon, `03`). **T4 = add an MRB / running-buffer term to
+   `monotonicity.py`'s LB.** Concrete next steps: (a) make the full oracle tractable at n=4 (optimize
+   the reachability floods / prune configs) to pin `swap_4_2`'s exact optimum (∈[8,12]); (b) derive the
+   MRB-aware LB and verify LB=optimum on the sub-MRB scenes; (c) the `gen_scenes.py --niche-floor`
+   (shallow niche) knob makes stacking-proof, non-degenerate looseness instances for the testbed.
 3. **Close the k≥4 planner-scaling gaps.** `blocked_goal_chain_4` (LB 9) and `swap_{4,5}_*`
    unsolved within budget; 20 s retry did **not** help → needs better search, not more time. These
    are the natural **"does the T2 bandit help?"** evaluation targets — re-run `bench_certify` after

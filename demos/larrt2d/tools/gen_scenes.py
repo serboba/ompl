@@ -60,22 +60,28 @@ def _rect(xmin, xmax, ymin, ymax):
             "ymin": round(ymin, 4), "ymax": round(ymax, 4)}
 
 
-def _box(name, cx, cy, gx, gy, W, target=True):
+def _box(name, cx, cy, gx, gy, W, target=True, ylo=BOX_YB[0]):
     """A non-rotating target box at (cx,cy) -> (gx,gy) in a width-W world."""
     o = {"name": name, "type": "box", "hx": H_BOX, "hy": H_BOX,
          "rotates": False, "target": target,
          "start": [round(cx, 4), round(cy, 4), 0.0],
          "xbounds": [WALL + H_BOX, round(W - WALL - H_BOX, 4)],
-         "ybounds": list(BOX_YB), "tbounds": [0.0, 0.0]}
+         "ybounds": [round(ylo, 4), BOX_YB[1]], "tbounds": [0.0, 0.0]}
     if target:
         o["goal"] = [round(gx, 4), round(gy, 4), 0.0]
     return o
 
 
-def _corridor_obstacles(W, niche_centers):
+def _corridor_obstacles(W, niche_centers, niche_floor=NICHE_FLOOR):
     """Top wall + side walls + floor broken by niche openings.
 
     Reproduces buffer_swap / two_buffer exactly for the matching niche centres.
+    `niche_floor` = height of the stub floor inside a niche opening: the default
+    1.4 gives a DEEP niche (cavity 1.4..2.5, tall enough that two boxes can stack
+    in the niche+lane column and a third squeeze over — the knife-edge that makes
+    a single niche suffice for a reversal). A SHALLOW niche (e.g. 1.8, cavity
+    1.8..2.5 = one box tall) forbids that stack-and-squeeze, so a niche holds one
+    box only and buffer scarcity (m < k-1) genuinely raises the optimum.
     """
     obs = [_rect(0.0, W, LANE_Y1, WORLD_H),        # top wall
            _rect(0.0, WALL, 0.0, WORLD_H),          # left wall
@@ -85,7 +91,7 @@ def _corridor_obstacles(W, niche_centers):
         x0, x1 = c - NICHE_W / 2, c + NICHE_W / 2
         if x0 > cursor + 1e-9:
             obs.append(_rect(cursor, x0, 0.0, LANE_Y0))   # solid floor segment
-        obs.append(_rect(x0, x1, 0.0, NICHE_FLOOR))       # niche stub
+        obs.append(_rect(x0, x1, 0.0, niche_floor))       # niche stub
         cursor = x1
     if W > cursor + 1e-9:
         obs.append(_rect(cursor, W, 0.0, LANE_Y0))
@@ -95,15 +101,18 @@ def _corridor_obstacles(W, niche_centers):
 # ---------------------------------------------------------------------------
 # swap_k_m : reverse k single-file boxes with m niches. Optimum conjecture 2k-1.
 # ---------------------------------------------------------------------------
-def gen_swap(k, m, slot_gap=3.0, margin=1.7):
+def gen_swap(k, m, slot_gap=3.0, margin=1.7, niche_floor=NICHE_FLOOR):
     """k boxes evenly spaced; goal = reversed order. m niches spread in the gaps.
 
     slot_gap: centre-to-centre box spacing. margin: clearance from the side walls
     to the first/last slot centre. Niches are placed at slot midpoints (canonical
     m=k-1) or spread as evenly as possible across the k-1 inter-slot gaps.
+    niche_floor: 1.4 (deep, default, allows stack-and-squeeze) or e.g. 1.8
+    (shallow, one box per niche -> buffer scarcity genuinely raises the optimum).
     """
     if k < 2:
         raise ValueError("swap needs k>=2")
+    ylo = niche_floor + H_BOX
     x0 = WALL + margin
     slots = [x0 + i * slot_gap for i in range(k)]
     W = slots[-1] + margin + WALL
@@ -123,12 +132,13 @@ def gen_swap(k, m, slot_gap=3.0, margin=1.7):
     for i in range(k):
         cx = slots[i]
         gx = slots[k - 1 - i]        # reversed
-        objs.append(_box(names[i], cx, LANE_CY, gx, LANE_CY, W))
-    scene = {"name": "swap_%d_%d" % (k, m),
+        objs.append(_box(names[i], cx, LANE_CY, gx, LANE_CY, W, ylo=ylo))
+    shallow = niche_floor > NICHE_FLOOR + 1e-9
+    scene = {"name": "swap_%d_%d%s" % (k, m, "_shallow" if shallow else ""),
              "world": {"xmin": 0.0, "xmax": round(W, 4), "ymin": 0.0, "ymax": WORLD_H},
-             "obstacles": _corridor_obstacles(W, chosen),
+             "obstacles": _corridor_obstacles(W, chosen, niche_floor),
              "objects": objs,
-             "_meta": {"family": "swap", "k": k, "m": m,
+             "_meta": {"family": "swap", "k": k, "m": m, "niche_floor": niche_floor,
                        "optimum_conjecture": 2 * k - 1,
                        "optimum_status": "conjectured (verify vs sound LB)",
                        "mrb_conjecture": k - 1}}
@@ -311,7 +321,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    p = sub.add_parser("swap"); p.add_argument("--k", type=int, required=True); p.add_argument("--m", type=int, required=True); p.add_argument("-o")
+    p = sub.add_parser("swap"); p.add_argument("--k", type=int, required=True); p.add_argument("--m", type=int, required=True); p.add_argument("--niche-floor", type=float, default=NICHE_FLOOR); p.add_argument("-o")
     p = sub.add_parser("door_chain"); p.add_argument("--d", type=int, required=True); p.add_argument("-o")
     p = sub.add_parser("blocked"); p.add_argument("--k", type=int, required=True); p.add_argument("-o")
     p = sub.add_parser("random_room"); p.add_argument("--n", type=int, required=True); p.add_argument("--seed", type=int, default=0); p.add_argument("--rho", type=float, default=None); p.add_argument("-o")
@@ -321,7 +331,7 @@ def main():
     if a.cmd == "suite":
         gen_suite(a.outdir); return
     if a.cmd == "swap":
-        sc = gen_swap(a.k, a.m)
+        sc = gen_swap(a.k, a.m, niche_floor=a.niche_floor)
     elif a.cmd == "door_chain":
         sc = gen_door_chain(a.d)
     elif a.cmd == "blocked":
