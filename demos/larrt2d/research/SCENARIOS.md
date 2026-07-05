@@ -157,33 +157,64 @@ certified, note}` to `out/benchmark_certify.json`; `note` flags `LB!=proven_opt`
 step to delegate (HANDOFF §0); the bracket logic and mismatch analysis stay local.
 
 **First sweep (18 structured scenes, larrt, best-of-10 × 8 s; 2026-07-05):
-`9/18 certified`, `0` optimum↔LB mismatches** (`out/benchmark_certify.json`):
-| family | certified | not yet |
+`9/18` certified by the *planner* bracket, `0` optimum↔LB mismatches
+(`out/benchmark_certify.json`). The exact oracle (`tools/oracle.py`, 2026-07-06) then certified
+the rest of the resolved cases and confirmed **the sound LB is TIGHT on every structured scene**:
+| family | LB=optimum (oracle-confirmed) | certified how |
 |---|---|---|
-| `door_chain_d` | **d=1,2,3,4** (3,5,7,9) — scales perfectly | — |
-| `blocked_goal_chain_k` | **k=1,2,3** (3,5,7) | k=4 (LB 9): unsolved in 8 s → **planner-scaling gap** |
-| `swap_k_m` | **swap_2_1 (3), swap_3_2 (5)** | swap_3_1, swap_4_*, swap_5_* (below) |
+| `door_chain_d` | d=1..4 → 3,5,7,9 | planner (bracket closed) |
+| `blocked_goal_chain_k` | k=1..3 → 3,5,7; **k=4 → 9** | planner (1–3); **oracle (k=4)** |
+| `swap_k_m` (m=k−1) | swap_2_1 3, swap_3_2 5, **swap_4_3 7** | planner (2_1,3_2); **oracle (4_3)** |
+| `swap_3_1` (m=1) | **5** (stacking plan) | **oracle** |
 
-Two DISTINCT non-certification causes, worth separating in the paper:
-- **Planner-scaling gaps** (`blocked_goal_chain_4`, all `swap_{4,5}_*`): unsolved within
-  the 8 s budget; the sound LB stands, the planner just doesn't reach a solution at this
-  size/time. **A 20 s best-of-12 retry did NOT close them** — `blocked_goal_chain_4` and
-  `swap_4_1` stayed 0/12, and `swap_4_3` only reached **9** (never the conjectured 7), i.e.
-  an open bracket **[7, 9]**. So these are *genuine* planner gaps needing better search
-  (T5), not budget artifacts. **Consequence: the swap `2k−1` optimum is verified only for
-  k=2,3** (brackets closed at 3, 5); for **k≥4 it is OPEN** — 7 is neither reached by the
-  planner nor yet proven achievable for a 4-reversal, so `swap_4_3`'s true optimum ∈ [7, 9]
-  is undetermined (planner-suboptimal vs LB-loose, same ambiguity as `swap_3_1`).
-- **Buffer-scarcity LB looseness** (`swap_3_1`): SOLVED but at **7 > LB 5**. With a single
-  niche the 5-action plan — which parks **two** objects simultaneously (`B→niche₁, A→niche₂,
-  C→…`) — is unavailable, so the count rises. The sound LB is **niche-count-independent**
-  (a property of the reversal permutation), so it does not see buffer scarcity and is
-  **loose (still valid: 5 ≤ 7) when m < MRB-of-the-cheap-plan**. Whether 5 is *provably*
-  unachievable with one niche (LB genuinely loose) vs merely unfound (planner suboptimal) is
-  open — but the 5-plan's 2-simultaneous-buffer requirement is strong evidence for the former.
-  ⟹ an **MRB-aware lower bound** is the natural T4 extension; `swap_k_m` with m<k−1 is its
-  testbed. (This nuance — m sets the *cost*, not just feasibility — is a nicer result than the
-  original "m only controls feasibility" guess.)
+**Conclusion — for the CANONICAL family (`m=k−1`) + chains, there is ONE non-certification cause:
+planner scaling.** On these, the sound LB equals the true optimum (oracle-confirmed: swap `2k−1`
+for k=2,3,4; door `2d+1` for d=1..4; blocked `2k+1` for k=1..4). Where the planner alone did not
+close the bracket (`blocked_goal_chain_4`, `swap_4_3`, `swap_3_1`), it was **planner
+suboptimality/scaling**, not LB looseness — the oracle proves the true optima are 9, 7, 5 (= LB).
+**The oracle closes every canonical bracket the planner misses.**
+
+**BUT the sub-MRB swaps (`m<k−1`) are OPEN and re-open T4.** With fewer niches than the canonical
+`k−1`, the lean oracle gives `swap_4_2` (2 niches) = **12 ≫ LB 7**, and `swap_4_1`/`swap_5_1`
+(1 niche) return **no lean plan**. These are only *upper* bounds (the lean prune drops the near-lane
+*stacking* poses that let `swap_3_1` hit 5 with one niche), so the true sub-MRB optima are
+undetermined: they may drop to the LB via stacking, or genuinely exceed it — in which case the
+**niche-count-independent LB IS loose under real buffer scarcity** and an MRB-aware LB (T4) is
+warranted. Settling this needs the FULL-candidate oracle (`--no-prune`), which is expensive at n≥4
+and entangled with the knife-edge stacking degeneracy. **So: LB tight + planner-limited on the
+canonical family (solid, paper-ready); LB-looseness genuinely open on the sub-MRB family.**
+- **~~Buffer-scarcity LB looseness~~ (`swap_3_1`) — RETRACTED by the exact oracle (2026-07-06).**
+  The planner solves `swap_3_1` at **7**, so I hypothesized the LB (5) was *loose* under buffer
+  scarcity (one niche can't run a 2-simultaneous-buffer 5-plan). **Wrong.** `tools/oracle.py`
+  (A* over the discretized mode graph) finds an **optimal 5-action plan with one niche**, and I
+  independently re-verified its critical passage at h=0.02: the plan **stacks two boxes vertically
+  in the single niche column** (B at y≈1.75, C at y≈2.5) and threads A through a ~0.05-wide sliver
+  over them (free A-centre y ∈ {3.21,3.23,3.25}). So the **sound LB 5 is TIGHT**, `swap_3_1` is
+  **certifiable at 5**, and the planner's 7 is pure **suboptimality** (a sampling planner won't find
+  the knife-edge stacking plan). ⟹ this is a *planner* gap (T5), NOT LB looseness; MRB(3-reversal)=1
+  here (via stacking), and the suite currently has **no confirmed example of a loose sound LB**. Nice
+  side-benefit: the oracle closes a bracket (5) the planner reliably misses.
+
+### `tools/oracle.py` — exact small-n ground-truth oracle (T5b)  ✅ built
+`python3 tools/oracle.py scenes/<scene>.json [--cand-step 0.5] [--grid 0.1]`. A* over a
+**discretized mode graph**: a *configuration* assigns each object to a candidate pose (all
+objects' start/goal + a collision-free buffer grid); an *action* moves one object between
+candidates iff a collision-free single-object path exists with the others frozen (grid-flood
+reachability for boxes — connected-components cached per (object, others-config) for speed —
+interval sweep for 1-DOF). Cost = #actions; admissible heuristic = #objects off their goal. The
+result is an **exact optimum over the discretization = a real, validatable UPPER bound**, so it
+resolves the "planner-suboptimal vs LB-loose" question the planner alone cannot: oracle==LB ⇒
+certified; oracle<planner_UB ⇒ planner gap; oracle>LB (rich candidates) ⇒ LB genuinely loose.
+**Validated** against every known optimum (buffer_swap 3, blocked_goal 3, door_relock 3,
+two_buffer 5, swap_3_2 5, door_chain_2 5) and used to **certify the planner's open cases**:
+`swap_4_3` → **7**, `blocked_goal_chain_4` → **9**, `swap_3_1` → **5** (all = the sound LB).
+**Candidate modes:** default is LEAN (buffers = off-through-path pockets, farthest-point-sampled to
+`--max-buffers`) — fast, tractable to n≈5, and a valid UPPER bound. `--no-prune` keeps the full grid
+(needed for near-lane **stacking** optima the lean prune removes): e.g. `swap_3_1`'s knife-edge 5-plan
+(stack two boxes in one niche column + squeeze A through a 0.05 sliver) only appears with
+`--no-prune --cand-step 0.7` (whose y-grid hits the stacking pose y=2.5). Workflow: run lean; if the
+result exceeds the sound LB, re-run `--no-prune` (small n) to check for a stacking optimum. Certifies
+via the sandwich LB ≤ optimum ≤ oracle: when oracle == LB the optimum is proven.
 
 ### `tools/difficulty.py` — the four predictors of `03_...md` §5
 Density `ρ`, #cycles, |FVS|, and (approx) MRB + buffer-availability margin — a difficulty score for

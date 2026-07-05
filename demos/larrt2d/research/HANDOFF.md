@@ -250,27 +250,30 @@ blockers were under-counted; see §3.1a) — `door_chain_d` and `blocked_goal_ch
 mismatches** (`out/benchmark_certify.json`; details + the two non-cert causes in `SCENARIOS.md`).
 
 **T1 OPEN ITEMS (2026-07-05) — prioritized, each self-contained:**
-1. **Resolve the swap k≥4 brackets (planner-gap vs LB-loose ambiguity).** `swap_4_3` solves only
-   at **9** (LB 7, bracket [7,9]); `swap_4_*`/`swap_5_*` mostly unsolved even at 20 s best-of-12.
-   So the swap **`2k−1`=optimum conjecture is verified only for k=2,3, OPEN for k≥4**. Resolve by:
-   (a) hand-construct/search a **7-action 4-reversal** plan and *validate* it → if found, it's a
-   planner gap (→ item 3 / T5); (b) if 7 is provably unreachable with the available niches, the LB
-   is loose (→ item 2). Cleanest settle = the **exact small-n oracle (T5b)**. BLOCKS the swap
-   optimum claim for k≥4.
-2. **MRB-aware lower bound (feeds T4).** The sound LB is **niche-count-independent**, so it is
-   *loose under buffer scarcity*: `swap_3_1` solves at **7 > LB 5** (one niche can't run the
-   2-simultaneous-buffer 5-plan). Add a running-buffer / MRB term to the LB (briefing `03` MRB).
-   Testbed = `swap_k_{m<k−1}`. Also settle whether the 5-plan is *provably* impossible with m=1
-   (→ oracle) to confirm the LB is loose vs the planner merely suboptimal.
+1. **CANONICAL swap/chain brackets RESOLVED (2026-07-06) by `tools/oracle.py` (T5b).** The oracle
+   (A* over the discretized mode graph, validated vs every known optimum) certifies **`swap_3_1` → 5,
+   `swap_4_3` → 7, `blocked_goal_chain_4` → 9 — all = the sound LB.** So on the **canonical family
+   (`m=k−1`) + chains** the sound LB is TIGHT (swap `2k−1` k=2,3,4; door `2d+1` d=1..4; blocked `2k+1`
+   k=1..4), and every planner non-certification there is **planner scaling/suboptimality**, not LB
+   looseness. Note `swap_3_1`'s optimum-5 is a *knife-edge stacking* plan (reproduce with `oracle
+   --no-prune --cand-step 0.7`; the lean default gives 7). Remaining: settle the sub-MRB swaps (item 2).
+2. **MRB-aware lower bound (T4) — RE-OPENED as genuinely open (2026-07-06).** (Earlier I withdrew this
+   after `swap_3_1` turned out tight; that was too hasty.) The **sub-MRB swaps (`m<k−1`)** are the real
+   test: lean oracle gives `swap_4_2` (2 niches) = **12 ≫ LB 7** and `swap_4_1`/`swap_5_1` (1 niche) =
+   **no lean plan**. These are upper bounds only (lean drops stacking poses). If the FULL-candidate
+   oracle (`--no-prune`) drives them down to the LB → LB tight (T4 unneeded); if they stay `> LB` → the
+   **niche-count-independent LB is genuinely loose under buffer scarcity** and an MRB / running-buffer
+   term (briefing `03`) is warranted. Blocker: `--no-prune` at n≥4 is expensive + entangled with the
+   stacking degeneracy. This is the cleanest open LB question in the project.
 3. **Close the k≥4 planner-scaling gaps.** `blocked_goal_chain_4` (LB 9) and `swap_{4,5}_*`
    unsolved within budget; 20 s retry did **not** help → needs better search, not more time. These
    are the natural **"does the T2 bandit help?"** evaluation targets — re-run `bench_certify` after
    T2/T3 land and compare certification rate at equal budget.
-4. **`random_room` ground truth (needs T5b oracle).** The family is generated but **cannot be
-   benchmarked/certified** until the exact small-n oracle (A* over the discrete mode graph, n≤4)
-   supplies optima. Build the oracle, then run + certify `random_room`. Also: the generator's
-   `--rho` (density) arg is **accepted but not yet implemented** (fixed 8×8 room, n boxes) — wire
-   density in when the oracle exists so the phase-transition sweep (`03` §4–5) is meaningful.
+4. **`random_room` ground truth — oracle now built (T5b done).** `tools/oracle.py` exists and is
+   validated, so `random_room` can now be given ground-truth optima. Remaining: (a) run the
+   `random_room` family through the oracle + `bench_certify`; (b) wire the generator's `--rho`
+   (density) arg, currently **accepted but not implemented** (fixed 8×8 room), so the phase-transition
+   sweep (`03` §4–5) is meaningful.
 5. **Scale to ~500 instances + baselines (delegate).** Current sweep is 18 structured scenes,
    `larrt` only. Grow to the ~500-instance target (blocked by items 3/4) and add baseline planners
    (`bench_certify --planner`; `rrtconnect|bitstar|aitstar|...`) for the paper's comparison table.
