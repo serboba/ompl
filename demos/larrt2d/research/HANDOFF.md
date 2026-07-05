@@ -257,19 +257,25 @@ mismatches** (`out/benchmark_certify.json`; details + the two non-cert causes in
    k=1..4), and every planner non-certification there is **planner scaling/suboptimality**, not LB
    looseness. Note `swap_3_1`'s optimum-5 is a *knife-edge stacking* plan (reproduce with `oracle
    --no-prune --cand-step 0.7`; the lean default gives 7). Remaining: settle the sub-MRB swaps (item 2).
-2. **MRB-aware lower bound (T4) — IMPLEMENTED (2026-07-06), sound.** `monotonicity.py --mrb`
-   (and `bench_certify.py --mrb`) apply `mrb_refine()`: for the **single-crosser box-corridor family**
-   (guard: all boxes, `base_lb == 2·#objects−1` — the park-once structure), it runs the EXHAUSTIVE
-   `swap_optimum_check` search (all niche-slot assignments incl. stacking × all park/unpark orders,
-   each move reachability-checked). If no park-once plan of length `base_lb` exists, no plan of that
-   length exists at all, so it **soundly raises the LB by 1**. Verified: `swap_4_2` 7→**8**; every tight
-   scene UNCHANGED (`swap_3_1` 5, `swap_4_3` 7, buffer_swap 3, two_buffer 5, blocked_goal_chain_2 5);
-   doors/non-matching scenes skipped (no bump); off by default (backward compatible). It only ever
-   *raises* the LB and only when it *proves* the cheaper plan infeasible, so it cannot make the LB
-   unsound. **Remaining (T4.x):** (a) the bump is +1 only — `swap_4_2`'s exact optimum ∈[8,12] still
-   needs a tractable n=4 full oracle or an iterated search to pin; (b) generalize `mrb_refine` beyond
-   the single-crosser corridor family (arbitrary structure) — the honest open piece; (c) the
-   `gen_scenes.py --niche-floor` shallow-niche knob gives non-degenerate looseness testbeds for (b).
+2. **MRB-aware lower bound (T4) — IMPLEMENTED + GENERALIZED (2026-07-06), sound.** `monotonicity.py
+   --mrb` (and `bench_certify.py --mrb`) apply `mrb_refine()`, now backed by **`park_once_check.py`**
+   which decides park-once realizability GENERALLY: a BFS over per-object run-progress states (state =
+   how many of each object's base runs are done; each transition = one templated move, reachability-
+   checked with the others frozen). This drops the old single-crosser restriction — **any number of
+   crossers, any interleaving** — and handles **1-DOF doors/sliders** (open=buffer, close=return), so
+   `door_chain` is now evaluated (was skipped). Stacking order needs no special code (a bottom box
+   trapped under a top box is simply unreachable upward). Buffer poses = structural niche slots
+   (per-niche free-x-interval centres × box-height levels) / open-angle samples. **Soundness guard:**
+   `has_structural_buffers` — applies only to corridor/niche/articulated scenes (finite complete
+   buffer-slot set), NOT open rooms (`random_room` → skipped), so 'no plan found' is never a false
+   negative. If no park-once plan of length `base_lb` exists ⇒ optimum ≥ base_lb+1 ⇒ **sound +1 bump**.
+   Verified across the whole suite: bumps ONLY genuinely-loose scenes (`swap_4_2`/`swap_4_1`/`swap_5_1`
+   7/7/9→8/8/10, cross-validated by `swap_optimum_check`; `swap_3_1_shallow`) and known-INFEASIBLE
+   scenes (wedged doors, LB≤∞ so vacuously sound); every tight-feasible scene UNCHANGED incl. all doors;
+   off by default. **Remaining (T4.x):** (a) the bump is +1 only (not necessarily tight — `swap_4_2`
+   optimum ∈[8,12]); iterate the search to pin it; (b) the wedged-door bumps are *infeasibility*, not
+   scarcity — nicer to detect+label infeasible scenes separately; (c) `park_once_check` is O(minutes)
+   on infeasible/loose scenes (exhaustive) — fast on feasible ones.
 3. **Close the k≥4 planner-scaling gaps.** `blocked_goal_chain_4` (LB 9) and `swap_{4,5}_*`
    unsolved within budget; 20 s retry did **not** help → needs better search, not more time. These
    are the natural **"does the T2 bandit help?"** evaluation targets — re-run `bench_certify` after

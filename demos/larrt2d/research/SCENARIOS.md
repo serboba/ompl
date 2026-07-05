@@ -190,15 +190,20 @@ LB provably LOOSE on sub-MRB (`m<k−1`) ⟹ T4 (MRB / running-buffer-aware LB) 
 rigorous example.** (Exact `swap_4_2` optimum ∈ [8,12] still open — lean-oracle no-stacking bound
 is 12; pinning it needs a tractable full oracle.)
 
-**T4 IMPLEMENTED (2026-07-06): `monotonicity.py --mrb` / `bench_certify.py --mrb`.** `mrb_refine()`
-soundly tightens the LB for the single-crosser box-corridor family (guard: all boxes,
-`base_lb == 2·#objects−1`): it runs the exhaustive `swap_optimum_check` (all niche-slot assignments
-incl. stacking × all park/unpark orders, reachability-checked); if no park-once plan of length
-`base_lb` exists, no plan of that length does, so it **raises the LB by 1**. It ONLY ever raises the
-LB and only on proven infeasibility ⇒ cannot be unsound. Verified: `swap_4_2` 7→**8** (certifies the
-looseness), all tight scenes unchanged, non-matching scenes skipped, off by default. Open: the +1 is
-not necessarily tight (swap_4_2 optimum may exceed 8), and generalizing beyond the single-crosser
-corridor family is the honest remaining T4 work (use `--niche-floor` shallow scenes as the testbed).
+**T4 IMPLEMENTED + GENERALIZED (2026-07-06): `monotonicity.py --mrb` / `bench_certify.py --mrb`.**
+`mrb_refine()` now uses **`park_once_check.py`**, a GENERAL park-once realizability test: a BFS over
+per-object run-progress states (each transition = one templated move, reachability-checked with the
+others frozen). Handles **any number of crossers, any interleaving, and 1-DOF doors/sliders**
+(open=buffer, close=return — so `door_chain` is now covered, not skipped); stacking order is enforced
+automatically by reachability. Buffer poses = structural niche slots / open angles. **Guard:**
+`has_structural_buffers` (corridor/niche/articulated only, NOT open rooms) ⇒ the buffer-slot set is
+complete ⇒ 'no plan' is never a false negative. If no park-once plan of length `base_lb` exists ⇒
+optimum ≥ base_lb+1 ⇒ **sound +1 bump**. Whole-suite check: bumps ONLY genuinely-loose scenes
+(`swap_4_2`/`swap_4_1`/`swap_5_1` → 8/8/10, cross-validated by `swap_optimum_check`; shallow-niche
+scenes) and known-INFEASIBLE scenes (wedged doors, vacuously sound); **every tight-feasible scene
+UNCHANGED, incl. all doors**; off by default. Open (T4.x): the +1 is not necessarily tight; wedged
+doors bump as *infeasibility* (nicer to detect+label separately); the search is O(minutes) on
+loose/infeasible scenes (fast on feasible ones).
 - **~~Buffer-scarcity LB looseness~~ (`swap_3_1`) — RETRACTED by the exact oracle (2026-07-06).**
   The planner solves `swap_3_1` at **7**, so I hypothesized the LB (5) was *loose* under buffer
   scarcity (one niche can't run a 2-simultaneous-buffer 5-plan). **Wrong.** `tools/oracle.py`

@@ -538,44 +538,47 @@ def analyse(names, info, arcs):
 # T4: MRB / buffer-scarcity refinement of the sound lower bound
 # ---------------------------------------------------------------------------
 
-def mrb_refine(scene, base_lb):
+def mrb_refine(scene, base_lb, res=None):
     """SOUND buffer-scarcity (MRB) tightening of the sound LB (HANDOFF T4).
 
     The FVS-based sound LB corresponds to a *park-once* plan: each object makes
-    exactly its base number of runs. For the **single-crosser box-corridor
-    family** -- where `base_lb == 2*(#objects) - 1` (one object crosses once;
-    every other object parks once in a niche and then goes to its goal, all of
-    them parked simultaneously since each blocks the crosser's lane) -- a
-    park-once plan of length `base_lb` has a FORCED macro-structure
-    ([all parks][cross][all unparks]) with finitely many functionally distinct
-    buffer configs (niche bottom / stacked top). `swap_optimum_check` searches
-    them EXHAUSTIVELY (every niche-slot assignment incl. stacking x every
-    park/unpark order, each move reachability-checked). If NO such plan exists,
-    then no plan of length `base_lb` exists at all, so the true optimum is
-    >= base_lb + 1 -- a **sound** bump (buffer scarcity / the MRB phenomenon,
-    e.g. `swap_4_2`: 2 niches can't realise the 7-plan, optimum >= 8 > LB 7).
+    exactly its base number of runs (mover -> goal; buffered mover -> buffer ->
+    goal; parked blocker -> buffer -> start; door -> open -> closed). Buffer
+    scarcity can make that plan geometrically infeasible even though the
+    dependency graph permits it; then the true optimum exceeds `base_lb`.
 
-    This ONLY ever raises the LB, and only when it PROVES the cheaper plan
-    infeasible. Outside the guarded family it is a no-op (returns `base_lb`
-    unchanged), so it can never make the LB unsound. Returns (lb, note).
-    A fully general MRB-aware LB (arbitrary structure) remains open.
+    `park_once_check.feasible` decides realizability GENERALLY (any number of
+    crossers, any interleaving -- a BFS over per-object run-progress states with
+    each move reachability-checked; boxes AND 1-DOF doors/sliders; buffer poses =
+    the finite structural niche / open-angle slots). If NO park-once plan of
+    length `base_lb` exists, then no plan of that length exists at all, so the
+    optimum is >= base_lb + 1 -- a **sound** +1 bump (e.g. `swap_4_2`: two niches
+    cannot realise the 7-plan, optimum >= 8 > LB 7).
+
+    Guard: applies only when the scene has a COMPLETE finite buffer-slot set
+    (`has_structural_buffers`: corridor/niche or articulated scenes) -- NOT open
+    rooms, where buffers live anywhere and 'no plan found' would be unsound. It
+    only ever RAISES the LB, and only when it PROVES the cheaper plan infeasible,
+    so it can never make the LB unsound. Returns (lb, note). The +1 is not
+    necessarily tight (the exact optimum may be higher).
     """
     objs = scene.get("objects", [])
-    n = len(objs)
-    if n < 2 or any(o.get("type", "box") != "box" for o in objs):
+    if len(objs) < 2:
         return base_lb, None
-    if base_lb != 2 * n - 1:
-        return base_lb, None                  # not the park-once structure we can test
     try:
-        from swap_optimum_check import check
+        from park_once_check import feasible, has_structural_buffers
     except Exception as exc:                   # pragma: no cover
         return base_lb, "MRB check unavailable (%s)" % exc
-    found, _ = check(scene)
-    if found:
-        return base_lb, "MRB check: park-once (2k-1) plan feasible -> LB is tight"
-    return base_lb + 1, ("MRB check: NO park-once (2k-1) plan exists -> buffer scarcity "
-                         "forces >= 1 extra move; sound LB raised %d -> %d"
-                         % (base_lb, base_lb + 1))
+    if not has_structural_buffers(scene):
+        return base_lb, None                   # open room: slots not complete -> no bump
+    if res is None:
+        names = [o["name"] for o in objs]
+        info, ep_arcs, _sw, _w = build_graphs(scene, SWEEP_SAMPLES)
+        res = analyse(names, info, ep_arcs)
+    if feasible(scene, res["movers"], res["forced_blockers"], res["fvs"]):
+        return base_lb, "MRB check: park-once plan feasible -> LB is tight"
+    return base_lb + 1, ("MRB check: NO park-once plan exists -> buffer scarcity forces "
+                         ">= 1 extra move; sound LB raised %d -> %d" % (base_lb, base_lb + 1))
 
 
 # ---------------------------------------------------------------------------
@@ -609,7 +612,7 @@ def main(argv):
     sound_lb = ep["action_lower_bound"]
     mrb_note = None
     if args.mrb:
-        sound_lb, mrb_note = mrb_refine(scene, ep["action_lower_bound"])
+        sound_lb, mrb_note = mrb_refine(scene, ep["action_lower_bound"], res=ep)
 
     upper = None
     if args.solution:

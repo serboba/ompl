@@ -44,7 +44,7 @@ def sound_lb(scene, mrb=False):
     res = analyse(names, info, sound_arcs)
     lb = res["action_lower_bound"]
     if mrb:
-        lb, _ = mrb_refine(scene, lb)
+        lb, _ = mrb_refine(scene, lb, res=res)
     return lb, warns
 
 
