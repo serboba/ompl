@@ -51,6 +51,7 @@ if (OMPL_BUILD_TESTS)
     # add_ompl_test(test_2denvs_geometric geometric/2d/2denvs.cpp) # Test is brittle for github runners
     add_ompl_test(test_2dmap_geometric_simple geometric/2d/2dmap_simple.cpp)
     add_ompl_test(test_2dmap_ik geometric/2d/2dmap_ik.cpp)
+    add_ompl_test(test_larrt geometric/larrt.cpp)
     add_ompl_test(test_2dcircles_opt_geometric geometric/2d/2dcircles_optimize.cpp)
     add_ompl_test(test_2dpath_simplifying geometric/2d/2dpath_simplifying.cpp)
     add_ompl_test(test_fmt_null_goal geometric/test_fmt_null_goal.cpp)
